@@ -1,18 +1,19 @@
+import pymel.core as pm
 '''
 Foot Roll Script
 '''
 '''
-Selection
+Ordered Selection
 total 7
 
 4 foot roll joints:
     heel
     toe
     ball
-    ball
+    foot
 
 2 foot IK joints:
-    ball
+    foot
     ball
 
 1 IK control
@@ -31,9 +32,8 @@ ballTwist
 ballLR
 '''
 
-import pymel.core as pm
-
 selection = pm.ls(os=True)
+
 
 def add_attr_divider(obj):
     '''
@@ -47,6 +47,7 @@ def add_attr_divider(obj):
                     attributeType='enum', defaultValue=0, keyable=False, hidden=False,
                     enumName='..................................................................................')
         obj.setAttr(attr, channelBox=True)
+
 
 def foot_roll():
     jnt_rev = selection[:4]
@@ -63,7 +64,7 @@ def foot_roll():
     add_attr_divider(ctrl_IK)
     ctrl_IK.addAttr('heelTwist', niceName='Heel Twist', shortName='htw', attributeType='float', defaultValue=0,
                     keyable=True, hidden=False)
-    ctrl_IK.addAttr('toeTwist',niceName='Toe Twist', shortName='ttw', attributeType='float', defaultValue=0,
+    ctrl_IK.addAttr('toeTwist', niceName='Toe Twist', shortName='ttw', attributeType='float', defaultValue=0,
                     keyable=True, hidden=False)
     ctrl_IK.addAttr('ballTwist', niceName='Ball Twist', shortName='btw', attributeType='float', defaultValue=0,
                     keyable=True, hidden=False)
@@ -86,11 +87,12 @@ def foot_roll():
     # set jnt_rev limits
     # jnt_rev[0].maxRotLimitEnable.maxRotXLimitEnable.set(1)
     # jnt_rev[0].maxRotLimit.maxRotXLimit.set(0)
-    pm.transformLimits(jnt_rev[0], erx=[False, True], rx=[0,0])
-    pm.transformLimits(jnt_rev[1], erx=[True, False], rx=[0,0])
+    pm.transformLimits(jnt_rev[0], erx=[False, True], rx=[0, 0])
+    pm.transformLimits(jnt_rev[1], erx=[True, False], rx=[0, 0])
 
     # orient constraint jnt_IK to jnt_rev
     pm.orientConstraint(jnt_rev[1], jnt_IK[1], mo=True)
     pm.orientConstraint(jnt_rev[2], jnt_IK[0], mo=True)
+
 
 foot_roll()
