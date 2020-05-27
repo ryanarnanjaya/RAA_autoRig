@@ -88,7 +88,7 @@ class SceneData(object):
 
 
 class CharacterData(object):
-    def __init__(self, name, namespace = None,tab_list=list()):
+    def __init__(self, name, namespace=None, tab_list=list()):
         self.name = str(name)
         self.namespace = namespace
         # list of TabData
@@ -104,7 +104,7 @@ class TabData(object):
 
 class ButtonData(object):
     def __init__(self, name, pxm_enabled, pxm_hover, pxm_pressed,
-                 x, y, scale, command):
+                 x, y, scale, command_select, command_deselect):
         self.name = str(name)
         self.pxm_enabled = pxm_enabled
         self.pxm_hover = pxm_hover
@@ -112,7 +112,8 @@ class ButtonData(object):
         self.x = x
         self.y = y
         self.scale = scale
-        self.command = command
+        self.command_select = command_select
+        self.command_deselect = command_deselect
         self.store_data()
 
     def store_data(self):
@@ -126,22 +127,30 @@ button_01 = ButtonData('button_01',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_enabled.png',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_hover.png',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_pressed.png',
-                       100, 0, 1, partial(cmds.select, 'pSphere1'))
+                       100, 0, 1,
+                       'pm.select("pSphere1", add=True)',
+                       'pm.select("pSphere1", deselect=True)')
 button_02 = ButtonData('button_02',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_enabled.png',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_hover.png',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_pressed.png',
-                       0, 180, 0.6, partial(cmds.select, 'pCube1'))
+                       0, 180, 0.6,
+                       'pm.select("pCube1", add=True)',
+                       'pm.select("pCube1", deselect=True)')
 button_02 = ButtonData('button_03',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_enabled.png',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_hover.png',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_pressed.png',
-                       200, 180, 1, partial(cmds.select, 'pCylinder1'))
-button_02 = ButtonData('button_03',
+                       200, 180, 1,
+                       'pm.select("pCylinder1", add=True)',
+                       'pm.select("pCylinder1", deselect=True)')
+button_02 = ButtonData('button_04',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_enabled.png',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_hover.png',
                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_pressed.png',
-                       100, 360, 0.6, partial(cmds.select, 'pCone1'))
+                       100, 360, 0.6,
+                       'pm.select("pCone1", add=True)',
+                       'pm.select("pCone1", deselect=True)')
 
 
 class ButtonEncoder(json.JSONEncoder):
@@ -151,7 +160,7 @@ class ButtonEncoder(json.JSONEncoder):
                     obj.pxm_enabled,
                     obj.pxm_hover, obj.pxm_pressed,
                     obj.x, obj.y,
-                    obj.scale, obj.command)
+                    obj.scale, obj.command_select, obj.command_deselect)
         else:
             return super(ButtonEncoder, self).default(obj)
 
@@ -167,7 +176,8 @@ class ButtonDecoder(json.JSONDecoder):
                               dct['pxm_enabled'],
                               dct['pxm_hover'], dct['pxm_pressed'],
                               dct['x'], dct['y'],
-                              dct['scale'], dct['command'])
+                              dct['scale'],
+                              dct['command_select'], dct['command_deselect'])
         return dct
 
 
@@ -193,6 +203,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__(parent)
         self.setWindowFlags(self.windowFlags()
                             | QtCore.Qt.WindowStaysOnTopHint)
+        self.setProperty('saveWindowPref', True)
         self.window = 'test_star'
         self.title = 'Star'
         self.size = (720, 720)
@@ -251,7 +262,6 @@ class MainWindow(QtWidgets.QMainWindow):
             # todo: store it in a data object
         except IndexError as e:
             logger.info(e)
-
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -352,16 +362,30 @@ class TabWidget(QtWidgets.QTabWidget):
         '''
         create a '+' tab and a blank untitled tab
         '''
+        # style sheet for flat rounded buttons
+        style_sheet = '''QPushButton {
+                            border-radius: 10px;
+                            font: bold 16px;
+                            color: rgb(200, 200, 200);
+                            padding: 0px 0px 5px 0px;
+                            }
+                         QPushButton:hover {
+                            background-color: rgb(80, 80, 80);
+                            }
+                         QPushButton:pressed {
+                            background-color: rgb(90, 90, 90);
+                            }'''
         # create the 'new tab' tab with a button
-        self.insertTab(0, QtWidgets.QWidget(),'')
+        self.insertTab(0, QtWidgets.QWidget(), '')
         nb = self.new_btn = QtWidgets.QPushButton()
         nb.setFixedSize(20, 20)
         nb.setFlat(True)
-        font = QtGui.QFont()
+        # font = QtGui.QFont()
+        # font.setPointSize(12)
         # font.setBold(True)
-        font.setPointSize(12)
-        nb.setFont(font)
+        # nb.setFont(font)
         nb.setText('+')
+        nb.setStyleSheet(style_sheet)
         nb.clicked.connect(self.new_tab)
         self.tabBar().setTabButton(0, QtWidgets.QTabBar.RightSide, nb)
         self.tabBar().setTabEnabled(0, False)
@@ -406,13 +430,9 @@ class GraphicsView(QtWidgets.QGraphicsView):
         self.setRenderHints(QtGui.QPainter.Antialiasing
                             | QtGui.QPainter.SmoothPixmapTransform)
 
-        format = QtOpenGL.QGLFormat(QtOpenGL.QGL.SampleBuffers)
-        self.setViewport(QtOpenGL.QGLWidget(format))
+        # format = QtOpenGL.QGLFormat(QtOpenGL.QGL.SampleBuffers)
+        # self.setViewport(QtOpenGL.QGLWidget(format))
 
-        # self.rubberBand = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle, self)
-        # self.setMouseTracking(True)
-        # self.origin = QtCore.QPoint()
-        # self.changeRubberBand = False
         self.setDragMode(self.RubberBandDrag)
 
         self.background = QtWidgets.QGraphicsPixmapItem(None)
@@ -462,13 +482,16 @@ class GraphicsView(QtWidgets.QGraphicsView):
         for path in pxm_list:
             pxm = QtGui.QPixmap(path)
             pxm_s = pxm.scaled(pxm.size() * button_data.scale,
-                               QtCore.Qt.KeepAspectRatio)
+                               QtCore.Qt.KeepAspectRatio,
+                               QtCore.Qt.SmoothTransformation)
             pxm_s_list.append(pxm_s)
-        command = button_data.command
+        command_select = button_data.command_select
+        command_deselect = button_data.command_deselect
         pxm_item = PixmapItem(pxm_enabled=pxm_s_list[0],
                               pxm_hover=pxm_s_list[1],
                               pxm_pressed=pxm_s_list[2],
-                              command=command,
+                              command_select=command_select,
+                              command_deselect=command_deselect,
                               button_data=button_data)
         pxm_item.setPos(button_data.x, button_data.y)
         # .png alpha as bounding box, already default
@@ -493,9 +516,15 @@ class GraphicsView(QtWidgets.QGraphicsView):
         command selects current selection
         maya.cmds because list of PyNode must be strings
         '''
-        sel = cmds.ls(os=True)
         x = self.get_mouse_pos().x()
         y = self.get_mouse_pos().y()
+
+        sel = cmds.ls(os=True)
+        if not isinstance(sel, list):
+            sel = '"{}"'.format(sel)
+        command_select = 'pm.select({}, add=True)'.format(sel)
+        command_deselect = 'pm.select({}, deselect=True)'.format(sel)
+
         pxm_list = ['pxm_enabled',
                     'pxm_hover',
                     'pxm_pressed']
@@ -510,7 +539,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
                                  path_list[0],
                                  path_list[1],
                                  path_list[2],
-                                 x, y, 1, partial(cmds.select, sel))
+                                 x, y, 1,
+                                 command_select, command_deselect)
         self.create_button(button_data)
 
     def change_background(self):
@@ -543,18 +573,16 @@ class GraphicsView(QtWidgets.QGraphicsView):
         super(GraphicsView, self).mouseReleaseEvent(event)
 
 
-# variable to store selected buttons for shift combo
-_selected_item = deque()
-
-
 class PixmapItem(QtWidgets.QGraphicsPixmapItem):
 
     def __init__(self, pxm_enabled, pxm_hover, pxm_pressed,
-                 command=None, button_data=None, parent=None):
+                 command_select=None, command_deselect=None,
+                 button_data=None, parent=None):
         self.pxm_enabled = pxm_enabled
         self.pxm_hover = pxm_hover
         self.pxm_pressed = pxm_pressed
-        self.command = command
+        self.command_select = command_select
+        self.command_deselect = command_deselect
         self.button_data = button_data
         super(PixmapItem, self).__init__(self.pxm_enabled, parent)
         self.setAcceptHoverEvents(True)
@@ -642,12 +670,12 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         if change == self.ItemSelectedChange:
             if value:
                 try:
-                    self.command(add=True)
+                    exec(self.command_select)
                 except (TypeError, ValueError) as e:
                     logger.info(e)
             elif not value:
                 try:
-                    self.command(deselect=True)
+                    exec(self.command_deselect)
                 except (TypeError, ValueError) as e:
                     logger.info(e)
         return QtWidgets.QGraphicsItem.itemChange(self,
@@ -669,7 +697,7 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         action_select = menu_popup.addAction('Change Selection')
         action_select.setStatusTip('Change command to current selection')
         action_select.triggered.connect(self.change_selection)
-        selected_action = menu_popup.exec_(event.screenPos())
+        menu_popup.exec_(event.screenPos())
         event.setAccepted(True)
 
     def change_icon(self):
@@ -709,8 +737,12 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         update selection command based on currently selected
         '''
         sel = cmds.ls(os=True)
-        self.command = partial(cmds.select, sel)
-        self.button_data.command = self.command
+        if not isinstance(sel, list):
+            sel = '"{}"'.format(sel)
+        self.command_select = 'pm.select({}, add=True)'.format(sel)
+        self.command_deselect = 'pm.select({}, deselect=True)'.format(sel)
+        self.button_data.command_select = self.command_select
+        self.button_data.command_deselect = self.command_deselect
 
 
 test_ui = MainWindow()
