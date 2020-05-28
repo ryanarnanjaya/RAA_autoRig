@@ -82,29 +82,33 @@ button_list = list()
 
 
 class SceneData(object):
-    def __init__(self, char_list=list()):
+    def __init__(self, character_list=list()):
         # list of CharacterData
-        self.char_list = char_list
+        self.character_list = character_list
 
 
 class CharacterData(object):
-    def __init__(self, name, namespace=None, tab_list=list()):
+    def __init__(self, name, scene_data, namespace=None,
+                 tab_list=list()):
         self.name = str(name)
+        self.scene_data = scene_data
         self.namespace = namespace
         # list of TabData
         self.tab_list = tab_list
 
 
 class TabData(object):
-    def __init__(self, name, button_list=list()):
+    def __init__(self, name, character_data, button_list=list()):
         self.name = str(name)
         # list of ButtonData
+        self.character_data = character_data
         self.button_list = button_list
 
 
 class ButtonData(object):
     def __init__(self, name, pxm_enabled, pxm_hover, pxm_pressed,
-                 x, y, scale, command_select, command_deselect):
+                 x, y, scale, command_select, command_deselect,
+                 tab_data):
         self.name = str(name)
         self.pxm_enabled = pxm_enabled
         self.pxm_hover = pxm_hover
@@ -114,6 +118,7 @@ class ButtonData(object):
         self.scale = scale
         self.command_select = command_select
         self.command_deselect = command_deselect
+        self.tab_data = tab_data
         self.store_data()
 
     def store_data(self):
@@ -123,34 +128,34 @@ class ButtonData(object):
         button_list.append(self)
 
 
-button_01 = ButtonData('button_01',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_enabled.png',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_hover.png',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_pressed.png',
-                       100, 0, 1,
-                       'pm.select("pSphere1", add=True)',
-                       'pm.select("pSphere1", deselect=True)')
-button_02 = ButtonData('button_02',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_enabled.png',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_hover.png',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_pressed.png',
-                       0, 180, 0.6,
-                       'pm.select("pCube1", add=True)',
-                       'pm.select("pCube1", deselect=True)')
-button_02 = ButtonData('button_03',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_enabled.png',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_hover.png',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_pressed.png',
-                       200, 180, 1,
-                       'pm.select("pCylinder1", add=True)',
-                       'pm.select("pCylinder1", deselect=True)')
-button_02 = ButtonData('button_04',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_enabled.png',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_hover.png',
-                       'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_pressed.png',
-                       100, 360, 0.6,
-                       'pm.select("pCone1", add=True)',
-                       'pm.select("pCone1", deselect=True)')
+# button_01 = ButtonData('button_01',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_enabled.png',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_hover.png',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_pressed.png',
+#                        100, 0, 1,
+#                        'pm.select("pSphere1", add=True)',
+#                        'pm.select("pSphere1", deselect=True)')
+# button_02 = ButtonData('button_02',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_enabled.png',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_hover.png',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_pressed.png',
+#                        0, 180, 0.6,
+#                        'pm.select("pCube1", add=True)',
+#                        'pm.select("pCube1", deselect=True)')
+# button_02 = ButtonData('button_03',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_enabled.png',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_hover.png',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_pressed.png',
+#                        200, 180, 1,
+#                        'pm.select("pCylinder1", add=True)',
+#                        'pm.select("pCylinder1", deselect=True)')
+# button_02 = ButtonData('button_04',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_enabled.png',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_hover.png',
+#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_pressed.png',
+#                        100, 360, 0.6,
+#                        'pm.select("pCone1", add=True)',
+#                        'pm.select("pCone1", deselect=True)')
 
 
 class ButtonEncoder(json.JSONEncoder):
@@ -207,6 +212,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.window = 'test_star'
         self.title = 'Star'
         self.size = (720, 720)
+        self.scene_data = None
         self.create_ui()
 
     def create_ui(self):
@@ -215,22 +221,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.create_menu_bar()
 
-        main_widget = MainWidget(self)
-        self.setCentralWidget(main_widget)
+        tab_widget = TabWidget(self)
+        self.setCentralWidget(tab_widget)
 
         self.tool_bar = self.addToolBar('Namespace')
         self.tool_bar.setMovable(False)
         # self.statusBar().showMessage('...')
 
-        combo_box = QtWidgets.QComboBox(self.tool_bar)
+        self.combo_box = QtWidgets.QComboBox(self.tool_bar)
         self.tool_bar.addWidget(combo_box)
-        combo_box.addItem("Frodo")
-        combo_box.addItem("Bilbo")
-        combo_box.addItem("Gandalf")
+        self.combo_box.addItem('Frodo')
+        self.combo_box.addItem('Bilbo')
+        self.combo_box.addItem('Gandalf')
 
-        self.add_tool_bar_spacer()
-        # self.tool_bar.addSeparator()
-        # self.add_tool_bar_spacer()
+        self.add_tool_bar_spacer(4, 8)
 
         self.name_button = QtWidgets.QPushButton(self.tool_bar)
         self.tool_bar.addWidget(self.name_button)
@@ -247,12 +251,14 @@ class MainWindow(QtWidgets.QMainWindow):
         # name_label.setFixedSize(150, 18)
         self.name_label.setText('rig:')
 
-    def add_tool_bar_spacer(self):
+        self.new_scene()
+
+    def add_tool_bar_spacer(self, width, height):
         '''
         add a blank widget as a toolbar spacer
         '''
         spacer = QtWidgets.QWidget(self.tool_bar)
-        spacer.setFixedSize(4, 18)
+        spacer.setFixedSize(width, height)
         self.tool_bar.addWidget(spacer)
 
     def update_namespace(self):
@@ -269,20 +275,22 @@ class MainWindow(QtWidgets.QMainWindow):
         menu_file = menu_bar.addMenu('Scene')
         act_scene_new = menu_file.addAction('New Scene')
         act_scene_new.setStatusTip('Create a new picker scene')
+        act_scene_new.triggered.connect(self.new_scene)
         act_scene_open = menu_file.addAction('Open Scene...')
         act_scene_open.setStatusTip('Open a picker scene')
         act_scene_save = menu_file.addAction('Save Scene')
         act_scene_save.setStatusTip('Save picker scene')
 
         menu_file = menu_bar.addMenu('Character')
-        act_char_new = menu_file.addAction('New Character')
-        act_char_new.setStatusTip('Add a new character')
-        act_char_open = menu_file.addAction('Open Character...')
-        act_char_open.setStatusTip('Open a character')
-        act_char_save = menu_file.addAction('Save Character')
-        act_char_save.setStatusTip('Save current character')
-        act_char_del = menu_file.addAction('Delete Character')
-        act_char_del.setStatusTip('Delete current character')
+        act_character_new = menu_file.addAction('New Character')
+        act_character_new.setStatusTip('Add a new character')
+        act_character_new.triggered.connect(self.new_character)
+        act_character_open = menu_file.addAction('Open Character...')
+        act_character_open.setStatusTip('Open a character')
+        act_character_save = menu_file.addAction('Save Character')
+        act_character_save.setStatusTip('Save current character')
+        act_character_del = menu_file.addAction('Delete Character')
+        act_character_del.setStatusTip('Delete current character')
 
         menu_file = menu_bar.addMenu('Tab')
         act_tab_new = menu_file.addAction('New Tab')
@@ -294,62 +302,62 @@ class MainWindow(QtWidgets.QMainWindow):
         act_tab_del = menu_file.addAction('Delete Tab')
         act_tab_del.setStatusTip('Delete current tab')
 
+    def new_character(self):
+        '''
+        create a new character
+        '''
+        name, ok = QtWidgets.QInputDialog.getText(self,
+                                                  'New Character',
+                                                  'Enter character name:')
+        if ok:
+            character_data = CharacterData(name=name,
+                                           scene_data=self.scene_data)
+            self.combo_box.addItem(text=name, userData=character_data)
+            self.new_tab_widget(character_data)
 
-class MainWidget(QtWidgets.QWidget):
-    '''
-    container widget for tabs and QGraphicsView
-    '''
+    def new_tab_widget(self, character_data):
+        '''
+        create a new main widget for new character
+        '''
+        tab_widget = TabWidget(character_data, self)
+        self.setCentralWidget(tab_widget)
 
-    def __init__(self, parent=None):
-        # if parent is None:
-        #     self.parent = get_maya_window()
-        super(MainWidget, self).__init__(parent)
-        self.window = 'test_star'
-        self.title = 'Star'
-        self.size = (512, 512)
-        self.create_ui()
+    def new_scene(self):
+        '''
+        create a new scene
+        '''
+        self.scene_data = SceneData()
 
-    def create_ui(self):
-        # self.setWindowTitle(self.title)
-        # self.resize(QtCore.QSize(*self.size))
-        self.tab_widget = TabWidget(self)
-        self.main_layout = QtWidgets.QVBoxLayout()
-        self.setLayout(self.main_layout)
-        self.main_layout.addWidget(self.tab_widget)
-        # # plus button on right edge of window
-        # self.tab_plus_button = QtWidgets.QToolButton(self)
-        # self.tab_plus_button.setText('+')
-        # font = self.tab_plus_button.font()
-        # font.setBold(True)
-        # self.tab_plus_button.setFont(font)
-        # self.tab_widget.setCornerWidget(self.tab_plus_button)
-        # self.tab_plus_button.clicked.connect(self.create_tab)
 
-        # menu_bar = QtWidgets.QMenuBar(self)
-        # fileMenu = menu_bar.addMenu('&File')
+# class MainWidget(QtWidgets.QWidget):
+#     '''
+#     container widget for tabs widget and QGraphicsView
+#     '''
+#     def __init__(self, parent=None):
+#         super(MainWidget, self).__init__(parent)
+#         self.size = (512, 512)
+#         self.create_ui()
 
-    # def delete_instance(self):
-    #     if ui_instance is not None:
-    #         print('not None')
-    #         try:
-    #             ui_instance.setParent(None)
-    #             ui_instance.deleteLater()
-    #         except Exception as e:
-    #             pass
-    # def delete_ui(self):
-    #     for child in self.parent.children():
-    #         print(child.__class__.__module__)
-    #         if child.__class__.__module__ == 'RAA_picker':
-    #             child.setParent(None)
-    #             child.deleteLater()
-    #             logger.debug(child)
+#     def create_ui(self):
+#         self.tab_widget = TabWidget(self)
+#         self.main_layout = QtWidgets.QVBoxLayout()
+#         self.setLayout(self.main_layout)
+#         self.main_layout.addWidget(self.tab_widget)
 
 
 class TabWidget(QtWidgets.QTabWidget):
-    # bug with setMovable plus
+    '''
+    tab widget with tabs and plus button
+    bug with setMovable and plus button
+    '''
 
-    def __init__(self, parent=None):
-        super(TabWidget, self).__init__(parent)
+    def __init__(self, character_data, parent=None):
+        self.main_widget = QtWidgets.QWidget()
+        self.main_layout = QtWidgets.QVBoxLayout()
+        self.main_widget.setLayout(self.main_layout)
+        super(TabWidget, self).__init__(self.main_widget)
+        self.main_layout.addWidget(self)
+
         self.setTabsClosable(True)
         # self.setMovable(True)
         self.tabCloseRequested.connect(self.close_tab)
@@ -357,6 +365,7 @@ class TabWidget(QtWidgets.QTabWidget):
         self.tabBar().setSelectionBehaviorOnRemove(select_left)
         self.pad = 1
         self.create_tabs()
+        self.character_data = character_data
 
     def create_tabs(self):
         '''
@@ -397,7 +406,9 @@ class TabWidget(QtWidgets.QTabWidget):
         '''
         tab_layout = QtWidgets.QVBoxLayout()
         widget = QtWidgets.QWidget()
-        graphics_view = GraphicsView(self)
+        tab_data = TabData(name=name, character_data=self.character_data)
+        self.character_data.tab_list.append(tab_data)
+        graphics_view = GraphicsView(tab_data, self)
 
         index = self.count() - 1
         self.insertTab(index, widget, '{n}_{p}'.format(n=name, p=self.pad))
@@ -420,7 +431,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
     class for QGraphicsView to contain buttons
     '''
 
-    def __init__(self, scene, parent=None):
+    def __init__(self, tab_data=None, parent=None):
         # create scene first
         self._scene = QtWidgets.QGraphicsScene()
         self._scene.setSceneRect(0, 0, 1, 1)
@@ -438,8 +449,10 @@ class GraphicsView(QtWidgets.QGraphicsView):
         self.background = QtWidgets.QGraphicsPixmapItem(None)
         self._scene.addItem(self.background)
 
-        for button_data in button_list:
-            self.create_button(button_data)
+        self.tab_data = tab_data
+
+        # for button_data in button_list:
+        #     self.create_button(button_data)
 
         # self.viewport().installEventFilter(self)
 
@@ -461,7 +474,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         if not event.isAccepted():
             menu_popup = QtWidgets.QMenu(self)
             action_new = menu_popup.addAction('New Button')
-            action_new.triggered.connect(self.add_button)
+            action_new.triggered.connect(self.new_button)
 
             action_bg = menu_popup.addAction('Change Background')
             action_bg.triggered.connect(self.change_background)
@@ -497,6 +510,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         # .png alpha as bounding box, already default
         # pxm_item.ShapeMode(QtWidgets.QGraphicsPixmapItem.MaskShape)
 
+        self.tab_data.button_list.append(button_data)
         self._scene.addItem(pxm_item)
 
     def get_mouse_pos(self):
@@ -509,7 +523,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         relative_origin = self.mapToScene(origin)
         return relative_origin
 
-    def add_button(self):
+    def new_button(self):
         '''
         called from contextMenuEvent
         add a new button on mouse position
@@ -588,9 +602,7 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         self.setAcceptHoverEvents(True)
         self.setAcceptTouchEvents(True)
         self._drag = False
-        # self._combo = False
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, True)
-        # self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, False)
 
     def hoverEnterEvent(self, event):
         '''
@@ -666,7 +678,6 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         '''
         detect when item is selected
         '''
-
         if change == self.ItemSelectedChange:
             if value:
                 try:
@@ -700,6 +711,7 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         menu_popup.exec_(event.screenPos())
         event.setAccepted(True)
 
+    @QtCore.Slot()
     def change_icon(self):
         '''
         called from contextMenuEvent
@@ -720,6 +732,7 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
                 setattr(self.button_data, string, pxm)
         self.setPixmap(self.pxm_enabled)
 
+    @QtCore.Slot()
     def remove_button(self):
         '''
         called from contextMenuEvent
@@ -732,8 +745,10 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
             logger.error(e)
         logger.debug(button_list)
 
+    @QtCore.Slot()
     def change_selection(self):
         '''
+        called from contextMenuEvent
         update selection command based on currently selected
         '''
         sel = cmds.ls(os=True)
