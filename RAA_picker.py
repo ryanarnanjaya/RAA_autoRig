@@ -78,31 +78,31 @@ def file_dialog(parent=None, caption=None, directory='', for_open=True,
 
 
 # list to temporarily store button data
-button_list = list()
+button_data_list = list()
 
 
 class SceneData(object):
-    def __init__(self, character_list=list()):
+    def __init__(self, character_data_list):
         # list of CharacterData
-        self.character_list = character_list
+        self.character_data_list = character_data_list
 
 
 class CharacterData(object):
-    def __init__(self, name, scene_data, namespace=None,
-                 tab_list=list()):
+    def __init__(self, name, tab_data_list, scene_data=None,
+                 namespace=None):
         self.name = str(name)
         self.scene_data = scene_data
         self.namespace = namespace
         # list of TabData
-        self.tab_list = tab_list
+        self.tab_data_list = tab_data_list
 
 
 class TabData(object):
-    def __init__(self, name, character_data, button_list=list()):
+    def __init__(self, name, button_data_list, character_data=None):
         self.name = str(name)
         # list of ButtonData
         self.character_data = character_data
-        self.button_list = button_list
+        self.button_data_list = button_data_list
 
 
 class ButtonData(object):
@@ -123,9 +123,9 @@ class ButtonData(object):
 
     def store_data(self):
         '''
-        store the button data object into button_list
+        store the button data object into button_data_list
         '''
-        button_list.append(self)
+        button_data_list.append(self)
 
 
 # button_01 = ButtonData('button_01',
@@ -204,15 +204,18 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         if parent is None:
             self.parent = get_maya_window()
+            # self.parent = pm.ui.Window('MayaWindow').asQtObject()
 
         super(MainWindow, self).__init__(parent)
         self.setWindowFlags(self.windowFlags()
                             | QtCore.Qt.WindowStaysOnTopHint)
+        # self.setWindowFlags(QtCore.Qt.Window)
         self.setProperty('saveWindowPref', True)
         self.window = 'test_star'
         self.title = 'Star'
         self.size = (720, 720)
         self.scene_data = None
+        self.new_scene()
         self.create_ui()
 
     def create_ui(self):
@@ -221,18 +224,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.create_menu_bar()
 
-        tab_widget = TabWidget(self)
-        self.setCentralWidget(tab_widget)
-
         self.tool_bar = self.addToolBar('Namespace')
         self.tool_bar.setMovable(False)
         # self.statusBar().showMessage('...')
 
         self.combo_box = QtWidgets.QComboBox(self.tool_bar)
-        self.tool_bar.addWidget(combo_box)
-        self.combo_box.addItem('Frodo')
-        self.combo_box.addItem('Bilbo')
-        self.combo_box.addItem('Gandalf')
+        self.tool_bar.addWidget(self.combo_box)
+        self.combo_box.setFixedSize(144, 18)
+        self.combo_box.activated.connect(self.combo_box_activated)
+        self.new_character(name='character_1')
 
         self.add_tool_bar_spacer(4, 8)
 
@@ -302,31 +302,49 @@ class MainWindow(QtWidgets.QMainWindow):
         act_tab_del = menu_file.addAction('Delete Tab')
         act_tab_del.setStatusTip('Delete current tab')
 
-    def new_character(self):
+    def new_character(self, name=None):
         '''
         create a new character
         '''
-        name, ok = QtWidgets.QInputDialog.getText(self,
-                                                  'New Character',
-                                                  'Enter character name:')
+        if name is None:
+            name, ok = QtWidgets.QInputDialog.getText(self,
+                                                      'New Character',
+                                                      'Enter character name:')
+            index = self.combo_box.count()
+        else:
+            # if window init
+            ok = True
+            index = 0
         if ok:
             character_data = CharacterData(name=name,
-                                           scene_data=self.scene_data)
-            self.combo_box.addItem(text=name, userData=character_data)
+                                           scene_data=self.scene_data,
+                                           tab_data_list=list())
+            self.scene_data.character_data_list.append(character_data)
+
+            self.combo_box.addItem(name, character_data)
+            self.combo_box.setCurrentIndex(index)
             self.new_tab_widget(character_data)
 
     def new_tab_widget(self, character_data):
         '''
-        create a new main widget for new character
+        create a new main widget for a new character
         '''
-        tab_widget = TabWidget(character_data, self)
+        tab_widget = TabWidget(character_data=character_data,
+                               parent=self)
         self.setCentralWidget(tab_widget)
 
     def new_scene(self):
         '''
         create a new scene
         '''
-        self.scene_data = SceneData()
+        self.scene_data = SceneData(character_data_list=list())
+
+    def combo_box_activated(self, index):
+        '''
+        handle when user selects a character from combo_box
+        '''
+        character_data = self.combo_box.itemData(index)
+        self.new_tab_widget(character_data)
 
 
 # class MainWidget(QtWidgets.QWidget):
@@ -352,20 +370,23 @@ class TabWidget(QtWidgets.QTabWidget):
     '''
 
     def __init__(self, character_data, parent=None):
-        self.main_widget = QtWidgets.QWidget()
-        self.main_layout = QtWidgets.QVBoxLayout()
-        self.main_widget.setLayout(self.main_layout)
-        super(TabWidget, self).__init__(self.main_widget)
-        self.main_layout.addWidget(self)
+        # self.main_widget = QtWidgets.QWidget(parent)
+        # self.main_layout = QtWidgets.QVBoxLayout()
+        # self.main_widget.setLayout(self.main_layout)
+        super(TabWidget, self).__init__(parent)
+        # self.main_layout.addWidget(self)
 
         self.setTabsClosable(True)
         # self.setMovable(True)
+
         self.tabCloseRequested.connect(self.close_tab)
+
         select_left = QtWidgets.QTabBar.SelectLeftTab
         self.tabBar().setSelectionBehaviorOnRemove(select_left)
+
         self.pad = 1
-        self.create_tabs()
         self.character_data = character_data
+        self.create_tabs()
 
     def create_tabs(self):
         '''
@@ -398,32 +419,56 @@ class TabWidget(QtWidgets.QTabWidget):
         nb.clicked.connect(self.new_tab)
         self.tabBar().setTabButton(0, QtWidgets.QTabBar.RightSide, nb)
         self.tabBar().setTabEnabled(0, False)
-        self.new_tab()
+        if self.character_data.tab_data_list == list():
+            self.new_tab()
+        else:
+            for tab_data in self.character_data.tab_data_list:
+                self.create_tab(tab_data)
 
     def new_tab(self, name='untitled'):
         '''
         create a new blank untitled tab
         '''
+        # tab_layout = QtWidgets.QVBoxLayout()
+        # widget = QtWidgets.QWidget()
+        # index = self.count() - 1
+        tab_name = '{n}_{p}'.format(n=name, p=self.pad)
+        tab_data = TabData(name=tab_name,
+                           character_data=self.character_data,
+                           button_data_list=list())
+        self.character_data.tab_data_list.append(tab_data)
+
+        # graphics_view = GraphicsView(tab_data, self)
+        # self.insertTab(index, widget, tab_name)
+        self.pad += 1
+        # widget.setLayout(tab_layout)
+        # tab_layout.addWidget(graphics_view)
+        # self.setCurrentIndex(index)
+        return self.create_tab(tab_data)
+
+    def create_tab(self, tab_data):
+        '''
+        basic method to create a tab
+        '''
         tab_layout = QtWidgets.QVBoxLayout()
         widget = QtWidgets.QWidget()
-        tab_data = TabData(name=name, character_data=self.character_data)
-        self.character_data.tab_list.append(tab_data)
         graphics_view = GraphicsView(tab_data, self)
 
         index = self.count() - 1
-        self.insertTab(index, widget, '{n}_{p}'.format(n=name, p=self.pad))
-        self.pad += 1
+        self.insertTab(index, widget, tab_data.name)
         widget.setLayout(tab_layout)
         tab_layout.addWidget(graphics_view)
         self.setCurrentIndex(index)
         return widget
 
+    @QtCore.Slot()
     def close_tab(self, index):
         '''
         slot to close tab
         '''
         # if self.count() > 2:
         self.removeTab(index)
+        self.character_data.tab_data_list.pop(index)
 
 
 class GraphicsView(QtWidgets.QGraphicsView):
@@ -451,7 +496,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
 
         self.tab_data = tab_data
 
-        # for button_data in button_list:
+        # for button_data in button_data_list:
         #     self.create_button(button_data)
 
         # self.viewport().installEventFilter(self)
@@ -510,7 +555,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         # .png alpha as bounding box, already default
         # pxm_item.ShapeMode(QtWidgets.QGraphicsPixmapItem.MaskShape)
 
-        self.tab_data.button_list.append(button_data)
+        self.tab_data.button_data_list.append(button_data)
         self._scene.addItem(pxm_item)
 
     def get_mouse_pos(self):
@@ -539,6 +584,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         command_select = 'pm.select({}, add=True)'.format(sel)
         command_deselect = 'pm.select({}, deselect=True)'.format(sel)
 
+        # file_dialog to choose button states images
         pxm_list = ['pxm_enabled',
                     'pxm_hover',
                     'pxm_pressed']
@@ -554,7 +600,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
                                  path_list[1],
                                  path_list[2],
                                  x, y, 1,
-                                 command_select, command_deselect)
+                                 command_select, command_deselect,
+                                 self.tab_data)
         self.create_button(button_data)
 
     def change_background(self):
@@ -736,14 +783,15 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
     def remove_button(self):
         '''
         called from contextMenuEvent
-        remove a button and its ButtonData in button_list
+        remove a button and its ButtonData in button_data_list
+        todo: remove from TabData
         '''
         self.scene().removeItem(self)
         try:
-            button_list.remove(self.button_data)
+            button_data_list.remove(self.button_data)
         except ValueError as e:
             logger.error(e)
-        logger.debug(button_list)
+        logger.debug(button_data_list)
 
     @QtCore.Slot()
     def change_selection(self):
