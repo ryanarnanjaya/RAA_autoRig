@@ -10,6 +10,9 @@ import pymel.core as pm
 # import os
 import logging
 import json
+import re
+# import sip
+# No module named sip
 # import yaml
 # The Qt Resource System for .png files
 # Add tabs for facial and body pickers
@@ -78,7 +81,7 @@ def file_dialog(parent=None, caption=None, directory='', for_open=True,
 
 
 # list to temporarily store button data
-button_data_list = list()
+# button_data_list = list()
 
 
 class SceneData(object):
@@ -100,8 +103,8 @@ class CharacterData(object):
 class TabData(object):
     def __init__(self, name, button_data_list, character_data=None):
         self.name = str(name)
-        # list of ButtonData
         self.character_data = character_data
+        # list of ButtonData
         self.button_data_list = button_data_list
 
 
@@ -119,13 +122,13 @@ class ButtonData(object):
         self.command_select = command_select
         self.command_deselect = command_deselect
         self.tab_data = tab_data
-        self.store_data()
+        # self.store_data()
 
-    def store_data(self):
-        '''
-        store the button data object into button_data_list
-        '''
-        button_data_list.append(self)
+    # def store_data(self):
+    #     '''
+    #     store the button data object into button_data_list
+    #     '''
+    #     button_data_list.append(self)
 
 
 # button_01 = ButtonData('button_01',
@@ -312,7 +315,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                                       'Enter character name:')
             index = self.combo_box.count()
         else:
-            # if window init
+            # if window init with given name
             ok = True
             index = 0
         if ok:
@@ -368,30 +371,26 @@ class TabWidget(QtWidgets.QTabWidget):
     tab widget with tabs and plus button
     bug with setMovable and plus button
     '''
-
     def __init__(self, character_data, parent=None):
-        # self.main_widget = QtWidgets.QWidget(parent)
-        # self.main_layout = QtWidgets.QVBoxLayout()
-        # self.main_widget.setLayout(self.main_layout)
         super(TabWidget, self).__init__(parent)
-        # self.main_layout.addWidget(self)
-
+        self.character_data = character_data
+        self.setTabBar(TabBar(self))
         self.setTabsClosable(True)
         # self.setMovable(True)
-
+        self.currentChanged.connect(self.resize_close)
         self.tabCloseRequested.connect(self.close_tab)
-
         select_left = QtWidgets.QTabBar.SelectLeftTab
         self.tabBar().setSelectionBehaviorOnRemove(select_left)
+        self.init_tabs()
 
-        self.pad = 1
-        self.character_data = character_data
-        self.create_tabs()
+    tabBarDoubleClicked = QtCore.Signal(int)
 
-    def create_tabs(self):
+    def init_tabs(self):
         '''
         create a '+' tab and a blank untitled tab
         '''
+        self.tabBar().tabDoubleClicked.connect(self.tabBarDoubleClicked)
+
         # style sheet for flat rounded buttons
         style_sheet = '''QPushButton {
                             border-radius: 10px;
@@ -425,25 +424,35 @@ class TabWidget(QtWidgets.QTabWidget):
             for tab_data in self.character_data.tab_data_list:
                 self.create_tab(tab_data)
 
-    def new_tab(self, name='untitled'):
+    def get_max_padding(self):
+        padding_list = list()
+        for tab_data in self.character_data.tab_data_list:
+            if 'Untitled_' not in tab_data.name:
+                continue
+            match = re.search('^Untitled_0*([1-9]+[0-9]{0,})$',
+                                tab_data.name)
+            if match:
+                padding_list.append(int(match.group(1)))
+            else:
+                padding_list.append(0)
+        try:
+            return max(padding_list)
+        except ValueError as e:
+            logger.debug(e)
+            return 0
+
+    def new_tab(self, name='Untitled'):
         '''
         create a new blank untitled tab
         '''
-        # tab_layout = QtWidgets.QVBoxLayout()
-        # widget = QtWidgets.QWidget()
-        # index = self.count() - 1
-        tab_name = '{n}_{p}'.format(n=name, p=self.pad)
+        padding = self.get_max_padding() + 1
+        tab_name = '{n}_{p}'.format(n=name, p=padding)
         tab_data = TabData(name=tab_name,
                            character_data=self.character_data,
                            button_data_list=list())
         self.character_data.tab_data_list.append(tab_data)
+        # self.pad += 1
 
-        # graphics_view = GraphicsView(tab_data, self)
-        # self.insertTab(index, widget, tab_name)
-        self.pad += 1
-        # widget.setLayout(tab_layout)
-        # tab_layout.addWidget(graphics_view)
-        # self.setCurrentIndex(index)
         return self.create_tab(tab_data)
 
     def create_tab(self, tab_data):
@@ -452,8 +461,8 @@ class TabWidget(QtWidgets.QTabWidget):
         '''
         tab_layout = QtWidgets.QVBoxLayout()
         widget = QtWidgets.QWidget()
-        graphics_view = GraphicsView(tab_data, self)
-
+        graphics_view = GraphicsView(tab_data=tab_data,
+                                     parent=self)
         index = self.count() - 1
         self.insertTab(index, widget, tab_data.name)
         widget.setLayout(tab_layout)
@@ -469,6 +478,71 @@ class TabWidget(QtWidgets.QTabWidget):
         # if self.count() > 2:
         self.removeTab(index)
         self.character_data.tab_data_list.pop(index)
+        self.resize_close()
+
+    def resize_close(self):
+        right_side = QtWidgets.QTabBar.RightSide
+        if self.count() > 2:
+            self.tabBar().tabButton(0, right_side).show()
+        if self.count() == 2:
+            self.tabBar().tabButton(0, right_side).hide()
+        # finish rename line_edit
+        # self.tabBar().finish_rename()
+
+
+class TabBar(QtWidgets.QTabBar):
+    '''
+    QTabBar with double click signal and tab rename behavior.
+    '''
+
+    def __init__(self, parent=None):
+        super(TabBar, self).__init__(parent)
+        self.parent = parent
+
+    tabDoubleClicked = QtCore.Signal(int)
+
+    def mouseDoubleClickEvent(self, event):
+        tab_index = self.tabAt(event.pos())
+        self.tabDoubleClicked.emit(tab_index)
+        try:
+            # interupted rename by double-click other tab
+            self.finish_rename()
+        except AttributeError as e:
+            logger.debug(e)
+        self.start_rename(tab_index)
+
+    def start_rename(self, tab_index):
+        if tab_index is (self.count() - 1):
+            return
+        self.edited_tab = tab_index
+        rect = self.tabRect(tab_index)
+        top_margin = 3
+        left_margin = 6
+        self.line_edit = QtWidgets.QLineEdit(self)
+        self.line_edit.show()
+        self.line_edit.move(rect.left() + left_margin,
+                        rect.top() + top_margin)
+        self.line_edit.resize(rect.width() - 2 * left_margin,
+                           rect.height() - 2 * top_margin)
+        self.line_edit.setText(self.tabText(tab_index))
+        self.line_edit.selectAll()
+        self.line_edit.setFocus()
+        try:
+            self.line_edit.editingFinished.connect(self.finish_rename)
+        except AttributeError as e:
+            logger.debug(e)
+
+    # @QtCore.Slot()
+    def finish_rename(self):
+        logger.debug('finish_rename')
+        new_name = self.line_edit.text()
+        self.setTabText(self.edited_tab,
+                        new_name)
+        self.line_edit.deleteLater()
+        self.line_edit = None
+        # update tab_data.name
+        tab_data = self.parent.character_data.tab_data_list[self.edited_tab]
+        tab_data.name = new_name
 
 
 class GraphicsView(QtWidgets.QGraphicsView):
@@ -478,10 +552,10 @@ class GraphicsView(QtWidgets.QGraphicsView):
 
     def __init__(self, tab_data=None, parent=None):
         # create scene first
-        self._scene = QtWidgets.QGraphicsScene()
-        self._scene.setSceneRect(0, 0, 1, 1)
+        self.graphics_scene = QtWidgets.QGraphicsScene()
+        self.graphics_scene.setSceneRect(0, 0, 1, 1)
         # pass scene to the QGraphicsView's constructor method
-        super(GraphicsView, self).__init__(self._scene, parent)
+        super(GraphicsView, self).__init__(self.graphics_scene, parent)
         self.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
         self.setRenderHints(QtGui.QPainter.Antialiasing
                             | QtGui.QPainter.SmoothPixmapTransform)
@@ -492,12 +566,11 @@ class GraphicsView(QtWidgets.QGraphicsView):
         self.setDragMode(self.RubberBandDrag)
 
         self.background = QtWidgets.QGraphicsPixmapItem(None)
-        self._scene.addItem(self.background)
+        self.graphics_scene.addItem(self.background)
 
         self.tab_data = tab_data
-
-        # for button_data in button_data_list:
-        #     self.create_button(button_data)
+        for button_data in self.tab_data.button_data_list:
+            self.create_button(button_data)
 
         # self.viewport().installEventFilter(self)
 
@@ -543,6 +616,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
                                QtCore.Qt.KeepAspectRatio,
                                QtCore.Qt.SmoothTransformation)
             pxm_s_list.append(pxm_s)
+
         command_select = button_data.command_select
         command_deselect = button_data.command_deselect
         pxm_item = PixmapItem(pxm_enabled=pxm_s_list[0],
@@ -555,8 +629,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
         # .png alpha as bounding box, already default
         # pxm_item.ShapeMode(QtWidgets.QGraphicsPixmapItem.MaskShape)
 
-        self.tab_data.button_data_list.append(button_data)
-        self._scene.addItem(pxm_item)
+        # self.tab_data.button_data_list.append(button_data)
+        self.graphics_scene.addItem(pxm_item)
 
     def get_mouse_pos(self):
         '''
@@ -603,6 +677,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
                                  command_select, command_deselect,
                                  self.tab_data)
         self.create_button(button_data)
+        self.tab_data.button_data_list.append(button_data)
 
     def change_background(self):
         '''
@@ -783,15 +858,14 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
     def remove_button(self):
         '''
         called from contextMenuEvent
-        remove a button and its ButtonData in button_data_list
+        remove a button and its ButtonData in TabData.button_data_list
         todo: remove from TabData
         '''
         self.scene().removeItem(self)
         try:
-            button_data_list.remove(self.button_data)
+            self.button_data.tab_data.button_data_list.remove(self.button_data)
         except ValueError as e:
             logger.error(e)
-        logger.debug(button_data_list)
 
     @QtCore.Slot()
     def change_selection(self):
