@@ -513,6 +513,7 @@ class TabBar(QtWidgets.QTabBar):
 
     def start_rename(self, tab_index):
         if tab_index is (self.count() - 1):
+            # if plus button
             return
         self.edited_tab = tab_index
         rect = self.tabRect(tab_index)
