@@ -111,7 +111,7 @@ class TabData(object):
 class ButtonData(object):
     def __init__(self, name, pxm_enabled, pxm_hover, pxm_pressed,
                  x, y, scale, command_select, command_deselect,
-                 tab_data):
+                 tab_data, node_list=None):
         self.name = str(name)
         self.pxm_enabled = pxm_enabled
         self.pxm_hover = pxm_hover
@@ -122,6 +122,7 @@ class ButtonData(object):
         self.command_select = command_select
         self.command_deselect = command_deselect
         self.tab_data = tab_data
+        self.node_list = node_list
         # self.store_data()
 
     # def store_data(self):
@@ -218,6 +219,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.title = 'Star'
         self.size = (720, 720)
         self.scene_data = None
+        self.character_data = None
         self.new_scene()
         self.create_ui()
 
@@ -235,7 +237,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tool_bar.addWidget(self.combo_box)
         self.combo_box.setFixedSize(144, 18)
         self.combo_box.activated.connect(self.combo_box_activated)
-        self.new_character(name='character_1')
+        self.new_character(name='Character_1')
 
         self.add_tool_bar_spacer(4, 8)
 
@@ -249,10 +251,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.name_label = QtWidgets.QLineEdit(self.tool_bar)
         self.tool_bar.addWidget(self.name_label)
+        self.name_label.editingFinished.connect(self.propagate_namespace)
         # name_label.setSizePolicy(QtWidgets.QSizePolicy.Fixed,
         #                          QtWidgets.QSizePolicy.Expanding)
         # name_label.setFixedSize(150, 18)
         self.name_label.setText('rig:')
+        self.character_data.namespace = 'rig:'
 
         self.new_scene()
 
@@ -265,12 +269,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tool_bar.addWidget(spacer)
 
     def update_namespace(self):
+        '''
+        update namespace bar based on selection
+        propegate new namespace
+        '''
         try:
             namespace = pm.ls(os=True)[0].namespace()
-            self.name_label.setText(namespace)
-            # todo: store it in a data object
         except IndexError as e:
             logger.info(e)
+        else:
+            # if try success
+            self.name_label.setText(namespace)
+            self.propagate_namespace()
+
+    def propagate_namespace(self):
+        '''
+        update character_data
+        propagate namespace in each child buttons
+        '''
+        self.character_data.namespace = self.name_label.text()
+        child_graphics_view = self.findChildren(QtWidgets.QGraphicsView)
+        for graphics_view in child_graphics_view:
+            for button in graphics_view.items():
+                if QtWidgets.QGraphicsItem.ItemIsSelectable == button.flags():
+                    # only buttons have ItemIsSelectable flag
+                    button.set_namespace()
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -323,6 +346,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                            scene_data=self.scene_data,
                                            tab_data_list=list())
             self.scene_data.character_data_list.append(character_data)
+            self.character_data = character_data
 
             self.combo_box.addItem(name, character_data)
             self.combo_box.setCurrentIndex(index)
@@ -346,8 +370,8 @@ class MainWindow(QtWidgets.QMainWindow):
         '''
         handle when user selects a character from combo_box
         '''
-        character_data = self.combo_box.itemData(index)
-        self.new_tab_widget(character_data)
+        self.character_data = self.combo_box.itemData(index)
+        self.new_tab_widget(self.character_data)
 
 
 # class MainWidget(QtWidgets.QWidget):
@@ -377,19 +401,16 @@ class TabWidget(QtWidgets.QTabWidget):
         self.setTabBar(TabBar(self))
         self.setTabsClosable(True)
         # self.setMovable(True)
-        self.currentChanged.connect(self.resize_close)
+        self.currentChanged.connect(self.resize_close_button)
         self.tabCloseRequested.connect(self.close_tab)
         select_left = QtWidgets.QTabBar.SelectLeftTab
         self.tabBar().setSelectionBehaviorOnRemove(select_left)
         self.init_tabs()
 
-    tabBarDoubleClicked = QtCore.Signal(int)
-
     def init_tabs(self):
         '''
         create a '+' tab and a blank untitled tab
         '''
-        self.tabBar().tabDoubleClicked.connect(self.tabBarDoubleClicked)
 
         # style sheet for flat rounded buttons
         style_sheet = '''QPushButton {
@@ -430,7 +451,7 @@ class TabWidget(QtWidgets.QTabWidget):
             if 'Untitled_' not in tab_data.name:
                 continue
             match = re.search('^Untitled_0*([1-9]+[0-9]{0,})$',
-                                tab_data.name)
+                              tab_data.name)
             if match:
                 padding_list.append(int(match.group(1)))
             else:
@@ -478,9 +499,9 @@ class TabWidget(QtWidgets.QTabWidget):
         # if self.count() > 2:
         self.removeTab(index)
         self.character_data.tab_data_list.pop(index)
-        self.resize_close()
+        self.resize_close_button()
 
-    def resize_close(self):
+    def resize_close_button(self):
         right_side = QtWidgets.QTabBar.RightSide
         if self.count() > 2:
             self.tabBar().tabButton(0, right_side).show()
@@ -499,11 +520,8 @@ class TabBar(QtWidgets.QTabBar):
         super(TabBar, self).__init__(parent)
         self.parent = parent
 
-    tabDoubleClicked = QtCore.Signal(int)
-
     def mouseDoubleClickEvent(self, event):
         tab_index = self.tabAt(event.pos())
-        self.tabDoubleClicked.emit(tab_index)
         try:
             # interupted rename by double-click other tab
             self.finish_rename()
@@ -522,9 +540,9 @@ class TabBar(QtWidgets.QTabBar):
         self.line_edit = QtWidgets.QLineEdit(self)
         self.line_edit.show()
         self.line_edit.move(rect.left() + left_margin,
-                        rect.top() + top_margin)
+                            rect.top() + top_margin)
         self.line_edit.resize(rect.width() - 2 * left_margin,
-                           rect.height() - 2 * top_margin)
+                              rect.height() - 2 * top_margin)
         self.line_edit.setText(self.tabText(tab_index))
         self.line_edit.selectAll()
         self.line_edit.setFocus()
@@ -533,7 +551,7 @@ class TabBar(QtWidgets.QTabBar):
         except AttributeError as e:
             logger.debug(e)
 
-    # @QtCore.Slot()
+    @QtCore.Slot()
     def finish_rename(self):
         logger.debug('finish_rename')
         new_name = self.line_edit.text()
@@ -573,17 +591,6 @@ class GraphicsView(QtWidgets.QGraphicsView):
         for button_data in self.tab_data.button_data_list:
             self.create_button(button_data)
 
-        # self.viewport().installEventFilter(self)
-
-    # def eventFilter(self, obj, event):
-    #     if obj is self.viewport():
-    #         if event.type() == QtCore.QEvent.MouseButtonPress:
-    #             print('mouse press event = ', event.pos())
-    #         elif event.type() == QtCore.QEvent.MouseButtonRelease:
-    #             print('mouse release event = ', event.pos())
-
-    #     return QtWidgets.QWidget.eventFilter(self, obj, event)
-
     def contextMenuEvent(self, event):
         '''
         right click context menu for QGraphicsView
@@ -597,11 +604,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
 
             action_bg = menu_popup.addAction('Change Background')
             action_bg.triggered.connect(self.change_background)
-
-            # action_open = menu_popup.addAction('New Configuration')
-            # action_open = menu_popup.addAction('Open Configuration')
-            # action_save = menu_popup.addAction('Save Configuration')
-            selected_action = menu_popup.exec_(event.globalPos())
+            menu_popup.exec_(event.globalPos())
 
     def create_button(self, button_data):
         '''
@@ -618,19 +621,14 @@ class GraphicsView(QtWidgets.QGraphicsView):
                                QtCore.Qt.SmoothTransformation)
             pxm_s_list.append(pxm_s)
 
-        command_select = button_data.command_select
-        command_deselect = button_data.command_deselect
         pxm_item = PixmapItem(pxm_enabled=pxm_s_list[0],
                               pxm_hover=pxm_s_list[1],
                               pxm_pressed=pxm_s_list[2],
-                              command_select=command_select,
-                              command_deselect=command_deselect,
                               button_data=button_data)
         pxm_item.setPos(button_data.x, button_data.y)
         # .png alpha as bounding box, already default
         # pxm_item.ShapeMode(QtWidgets.QGraphicsPixmapItem.MaskShape)
 
-        # self.tab_data.button_data_list.append(button_data)
         self.graphics_scene.addItem(pxm_item)
 
     def get_mouse_pos(self):
@@ -653,11 +651,15 @@ class GraphicsView(QtWidgets.QGraphicsView):
         x = self.get_mouse_pos().x()
         y = self.get_mouse_pos().y()
 
-        sel = cmds.ls(os=True)
-        if not isinstance(sel, list):
-            sel = '"{}"'.format(sel)
-        command_select = 'pm.select({}, add=True)'.format(sel)
-        command_deselect = 'pm.select({}, deselect=True)'.format(sel)
+        # get selection name without namespace
+        selection = pm.ls(os=True)
+        node_list = list()
+        for sel in selection:
+            # remove all namespace and append to selection_list
+            node_list.append(sel.stripNamespace().__str__())
+        # {{}} will output excaped {}
+        command_select = 'pm.select({}, add=True)'
+        command_deselect = 'pm.select({}, deselect=True)'
 
         # file_dialog to choose button states images
         pxm_list = ['pxm_enabled',
@@ -676,7 +678,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
                                  path_list[2],
                                  x, y, 1,
                                  command_select, command_deselect,
-                                 self.tab_data)
+                                 self.tab_data, node_list)
         self.create_button(button_data)
         self.tab_data.button_data_list.append(button_data)
 
@@ -713,19 +715,32 @@ class GraphicsView(QtWidgets.QGraphicsView):
 class PixmapItem(QtWidgets.QGraphicsPixmapItem):
 
     def __init__(self, pxm_enabled, pxm_hover, pxm_pressed,
-                 command_select=None, command_deselect=None,
                  button_data=None, parent=None):
         self.pxm_enabled = pxm_enabled
         self.pxm_hover = pxm_hover
         self.pxm_pressed = pxm_pressed
-        self.command_select = command_select
-        self.command_deselect = command_deselect
         self.button_data = button_data
+        self.command_select = button_data.command_select
+        self.command_deselect = button_data.command_deselect
+        self.node_list = button_data.node_list
+        self.name_list = list()
         super(PixmapItem, self).__init__(self.pxm_enabled, parent)
         self.setAcceptHoverEvents(True)
         self.setAcceptTouchEvents(True)
         self._drag = False
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, True)
+        self.set_namespace()
+
+    def set_namespace(self):
+        '''
+        set namespace to name_list for every node in node_list
+        '''
+        namespace = self.button_data.tab_data.character_data.namespace
+        if namespace is None:
+            return
+        self.name_list = list()
+        for node in self.node_list:
+            self.name_list.append(namespace + node)
 
     def hoverEnterEvent(self, event):
         '''
@@ -800,16 +815,17 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
     def itemChange(self, change, value):
         '''
         detect when item is selected
+        todo: work with current namespace
         '''
         if change == self.ItemSelectedChange:
             if value:
                 try:
-                    exec(self.command_select)
+                    exec(self.command_select.format(self.name_list))
                 except (TypeError, ValueError) as e:
                     logger.info(e)
             elif not value:
                 try:
-                    exec(self.command_deselect)
+                    exec(self.command_deselect.format(self.name_list))
                 except (TypeError, ValueError) as e:
                     logger.info(e)
         return QtWidgets.QGraphicsItem.itemChange(self,
@@ -832,6 +848,7 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         action_select.setStatusTip('Change command to current selection')
         action_select.triggered.connect(self.change_selection)
         menu_popup.exec_(event.screenPos())
+        # prevent QGraphicsView's contextMenuEvent to run
         event.setAccepted(True)
 
     @QtCore.Slot()
@@ -874,13 +891,15 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         called from contextMenuEvent
         update selection command based on currently selected
         '''
-        sel = cmds.ls(os=True)
-        if not isinstance(sel, list):
-            sel = '"{}"'.format(sel)
-        self.command_select = 'pm.select({}, add=True)'.format(sel)
-        self.command_deselect = 'pm.select({}, deselect=True)'.format(sel)
-        self.button_data.command_select = self.command_select
-        self.button_data.command_deselect = self.command_deselect
+        # get selection name without namespace
+        selection = pm.ls(os=True)
+        self.node_list = list()
+        for sel in selection:
+            # remove all namespace and append to selection_list
+            self.node_list.append(sel.stripNamespace().__str__())
+        # update ButtonData
+        self.button_data.node_list = self.node_list
+        self.set_namespace()
 
 
 test_ui = MainWindow()
