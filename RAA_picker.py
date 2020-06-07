@@ -193,6 +193,8 @@ class ButtonDecoder(json.JSONDecoder):
 def get_maya_window():
     '''
     get maya main window from a C++ pointer in memory using shiboken2
+    advantage: works without pymel
+    disadvantage: requires more lines of code, unsupported < Maya 2017
     '''
     try:
         pointer = omui.MQtUtil.mainWindow()
@@ -215,8 +217,7 @@ class MainWindow(QtWidgets.QMainWindow):
                             | QtCore.Qt.WindowStaysOnTopHint)
         # self.setWindowFlags(QtCore.Qt.Window)
         self.setProperty('saveWindowPref', True)
-        self.window = 'test_star'
-        self.title = 'Star'
+        self.title = 'RAA_picker'
         self.size = (720, 720)
         self.scene_data = None
         self.character_data = None
@@ -267,33 +268,6 @@ class MainWindow(QtWidgets.QMainWindow):
         spacer = QtWidgets.QWidget(self.tool_bar)
         spacer.setFixedSize(width, height)
         self.tool_bar.addWidget(spacer)
-
-    def update_namespace(self):
-        '''
-        update namespace bar based on selection
-        propegate new namespace
-        '''
-        try:
-            namespace = pm.ls(os=True)[0].namespace()
-        except IndexError as e:
-            logger.info(e)
-        else:
-            # if try success
-            self.name_label.setText(namespace)
-            self.propagate_namespace()
-
-    def propagate_namespace(self):
-        '''
-        update character_data
-        propagate namespace in each child buttons
-        '''
-        self.character_data.namespace = self.name_label.text()
-        child_graphics_view = self.findChildren(QtWidgets.QGraphicsView)
-        for graphics_view in child_graphics_view:
-            for button in graphics_view.items():
-                if QtWidgets.QGraphicsItem.ItemIsSelectable == button.flags():
-                    # only buttons have ItemIsSelectable flag
-                    button.set_namespace()
 
     def create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -362,16 +336,46 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def new_scene(self):
         '''
-        create a new scene
+        create a new SceneData
         '''
         self.scene_data = SceneData(character_data_list=list())
 
     def combo_box_activated(self, index):
         '''
-        handle when user selects a character from combo_box
+        when user selects a character from combo_box
+        set namespace from CharacterData
         '''
         self.character_data = self.combo_box.itemData(index)
         self.new_tab_widget(self.character_data)
+        self.name_label.setText(self.character_data.namespace)
+        self.propagate_namespace()
+
+    def update_namespace(self):
+        '''
+        update namespace QLineEdit based on selection
+        propegate new namespace
+        '''
+        try:
+            namespace = pm.ls(os=True)[0].namespace()
+        except IndexError as e:
+            logger.info(e)
+        else:
+            # if try success
+            self.name_label.setText(namespace)
+            self.propagate_namespace()
+
+    def propagate_namespace(self):
+        '''
+        update character_data
+        propagate namespace in each child buttons
+        '''
+        self.character_data.namespace = self.name_label.text()
+        child_graphics_view = self.findChildren(QtWidgets.QGraphicsView)
+        for graphics_view in child_graphics_view:
+            for button in graphics_view.items():
+                if QtWidgets.QGraphicsItem.ItemIsSelectable == button.flags():
+                    # only buttons have ItemIsSelectable flag
+                    button.set_namespace()
 
 
 # class MainWidget(QtWidgets.QWidget):
