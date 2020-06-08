@@ -221,8 +221,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.size = (720, 720)
         self.scene_data = None
         self.character_data = None
-        self.new_scene()
         self.create_ui()
+        self.new_scene()
 
     def create_ui(self):
         self.setWindowTitle(self.title)
@@ -238,7 +238,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tool_bar.addWidget(self.combo_box)
         self.combo_box.setFixedSize(144, 18)
         self.combo_box.activated.connect(self.combo_box_activated)
-        self.new_character(name='Character_1')
+        # self.new_character(name='Character_1')
 
         self.add_tool_bar_spacer(4, 8)
 
@@ -257,9 +257,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #                          QtWidgets.QSizePolicy.Expanding)
         # name_label.setFixedSize(150, 18)
         self.name_label.setText('rig:')
-        self.character_data.namespace = 'rig:'
-
-        self.new_scene()
+        # self.character_data.namespace = 'rig:'
 
     def add_tool_bar_spacer(self, width, height):
         '''
@@ -289,18 +287,21 @@ class MainWindow(QtWidgets.QMainWindow):
         act_character_open.setStatusTip('Open a character')
         act_character_save = menu_file.addAction('Save Character')
         act_character_save.setStatusTip('Save current character')
-        act_character_del = menu_file.addAction('Delete Character')
-        act_character_del.setStatusTip('Delete current character')
+        act_character_rename = menu_file.addAction('Rename Character')
+        act_character_rename.setStatusTip('Rename current character')
+        act_character_delete = menu_file.addAction('Delete Character')
+        act_character_delete.setStatusTip('Delete current character')
+        act_character_delete.triggered.connect(self.delete_character)
 
         menu_file = menu_bar.addMenu('Tab')
-        act_tab_new = menu_file.addAction('New Tab')
-        act_tab_new.setStatusTip('Add a new blank tab')
+        # act_tab_new = menu_file.addAction('New Tab')
+        # act_tab_new.setStatusTip('Add a new blank tab')
         act_tab_open = menu_file.addAction('Open Tab...')
         act_tab_open.setStatusTip('Open a tab')
         act_tab_save = menu_file.addAction('Save Tab')
         act_tab_save.setStatusTip('Save current tab')
-        act_tab_del = menu_file.addAction('Delete Tab')
-        act_tab_del.setStatusTip('Delete current tab')
+        # act_tab_delete = menu_file.addAction('Delete Tab')
+        # act_tab_delete.setStatusTip('Delete current tab')
 
     def new_character(self, name=None):
         '''
@@ -326,6 +327,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.combo_box.setCurrentIndex(index)
             self.new_tab_widget(character_data)
 
+    def delete_character(self):
+        '''
+        delete active character
+        remove current data from character_data_list in SceneData
+        '''
+        if self.combo_box.count() == 1:
+            return
+        current_index = self.combo_box.currentIndex()
+        current_data = self.combo_box.itemData(current_index)
+        self.scene_data.character_data_list.remove(current_data)
+        self.combo_box.removeItem(current_index)
+        current_index = self.combo_box.currentIndex()
+        self.combo_box_activated(current_index)
+
     def new_tab_widget(self, character_data):
         '''
         create a new main widget for a new character
@@ -336,9 +351,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def new_scene(self):
         '''
-        create a new SceneData
+        clear all characters in combo_box
+        create a new SceneData with blank character_data_list
+        add a new Character_1
+        update namespace on CharacterData based on name_label
         '''
+        self.combo_box.clear()
         self.scene_data = SceneData(character_data_list=list())
+        self.new_character(name='Character_1')
+        self.propagate_namespace()
 
     def combo_box_activated(self, index):
         '''
@@ -415,7 +436,6 @@ class TabWidget(QtWidgets.QTabWidget):
         '''
         create a '+' tab and a blank untitled tab
         '''
-
         # style sheet for flat rounded buttons
         style_sheet = '''QPushButton {
                             border-radius: 10px;
@@ -450,6 +470,9 @@ class TabWidget(QtWidgets.QTabWidget):
                 self.create_tab(tab_data)
 
     def get_max_padding(self):
+        '''
+        get maximum # padding in Untitled_# tab names
+        '''
         padding_list = list()
         for tab_data in self.character_data.tab_data_list:
             if 'Untitled_' not in tab_data.name:
@@ -460,10 +483,9 @@ class TabWidget(QtWidgets.QTabWidget):
                 padding_list.append(int(match.group(1)))
             else:
                 padding_list.append(0)
-        try:
+        if padding_list:
             return max(padding_list)
-        except ValueError as e:
-            logger.debug(e)
+        else:
             return 0
 
     def new_tab(self, name='Untitled'):
