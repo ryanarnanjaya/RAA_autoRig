@@ -81,52 +81,10 @@ def file_dialog(parent=None, caption=None, directory='', for_open=True,
         return ''
 
 
-# list to temporarily store button data
-# button_data_list = list()
-
-
-class SceneData(object):
-    def __init__(self, character_data_list):
-        # list of CharacterData
-        self.character_data_list = character_data_list
-
-
-class CharacterData(object):
-    def __init__(self, name, tab_data_list, scene_data=None,
-                 namespace=None):
-        self.name = str(name)
-        self.scene_data = scene_data
-        self.namespace = namespace
-        # list of TabData
-        self.tab_data_list = tab_data_list
-
-
-class TabData(object):
-    def __init__(self, name, button_data_list, character_data=None):
-        self.name = str(name)
-        self.character_data = character_data
-        # list of ButtonData
-        self.button_data_list = button_data_list
-
-
-class ButtonData(object):
-    def __init__(self, name, pxm_enabled, pxm_hover, pxm_pressed,
-                 x, y, scale, command_select, command_deselect,
-                 tab_data, node_list=None):
-        self.name = str(name)
-        self.pxm_enabled = pxm_enabled
-        self.pxm_hover = pxm_hover
-        self.pxm_pressed = pxm_pressed
-        self.x = x
-        self.y = y
-        self.scale = scale
-        self.command_select = command_select
-        self.command_deselect = command_deselect
-        self.tab_data = tab_data
-        self.node_list = node_list
-
-
 class JsonConvert(object):
+    '''
+    class to convert class objects from and to json
+    '''
     mappings = {}
 
     @classmethod
@@ -192,32 +150,52 @@ class JsonConvert(object):
         return result
 
 
-class ButtonEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, ButtonData):
-            return (obj.name,
-                    obj.pxm_enabled,
-                    obj.pxm_hover, obj.pxm_pressed,
-                    obj.x, obj.y,
-                    obj.scale, obj.command_select, obj.command_deselect)
-        else:
-            return super(ButtonEncoder, self).default(obj)
+@JsonConvert.register
+class SceneData(object):
+    def __init__(self, character_data_list=None):
+        # list of CharacterData
+        self.character_data_list = character_data_list
 
 
-class ButtonDecoder(json.JSONDecoder):
-    def __init__(self, *args, **kwargs):
-        super(ButtonDecoder, self).__init__(self, object_hook=self.object_hook,
-                                            *args, **kwargs)
+@JsonConvert.register
+class CharacterData(object):
+    def __init__(self, name=None, tab_data_list=None, scene_data=None,
+                 namespace=None):
+        self.name = str(name)
+        self.scene_data = scene_data
+        self.namespace = namespace
+        # list of TabData
+        self.tab_data_list = tab_data_list
 
-    def object_hook(self, dct):
-        if 'name' in dct:
-            return ButtonData(dct['name'],
-                              dct['pxm_enabled'],
-                              dct['pxm_hover'], dct['pxm_pressed'],
-                              dct['x'], dct['y'],
-                              dct['scale'],
-                              dct['command_select'], dct['command_deselect'])
-        return dct
+
+@JsonConvert.register
+class TabData(object):
+    def __init__(self, name=None, button_data_list=None, character_data=None):
+        self.name = str(name)
+        self.character_data = character_data
+        # list of ButtonData
+        self.button_data_list = button_data_list
+
+
+@JsonConvert.register
+class ButtonData(object):
+    def __init__(self, name=None,
+                 pxm_enabled=None, pxm_hover=None, pxm_pressed=None,
+                 x=None, y=None, scale=None,
+                 command_select=None, command_deselect=None,
+                 tab_data=None, node_list=None):
+        self.name = str(name)
+        self.pxm_enabled = pxm_enabled
+        self.pxm_hover = pxm_hover
+        self.pxm_pressed = pxm_pressed
+        self.x = x
+        self.y = y
+        self.scale = scale
+        self.command_select = command_select
+        self.command_deselect = command_deselect
+        self.tab_data = tab_data
+        # list of nodes as inputs for commands
+        self.node_list = node_list
 
 
 def get_maya_window():
@@ -228,7 +206,7 @@ def get_maya_window():
     '''
     try:
         pointer = omui.MQtUtil.mainWindow()
-        maya_main_window = wrapInstance(long(pointer), QtWidgets.QMainWindow)
+        maya_main_window = wrapInstance(int(pointer), QtWidgets.QMainWindow)
     except Exception as e:
         maya_main_window = None
         logger.error(e)
