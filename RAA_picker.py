@@ -36,6 +36,7 @@ def file_dialog(parent=None, caption=None, directory='', for_open=True,
                 fmt={'desc': ['ext']}, is_folder=False, native_dialog=False):
     options = QtWidgets.QFileDialog.Options()
     # pipe notation | is a bitwise operator for OR
+    # or update sets
     if native_dialog:
         options |= QtWidgets.QFileDialog.DontUseNativeDialog
         options |= QtWidgets.QFileDialog.DontUseCustomDirectoryIcons
@@ -123,43 +124,72 @@ class ButtonData(object):
         self.command_deselect = command_deselect
         self.tab_data = tab_data
         self.node_list = node_list
-        # self.store_data()
-
-    # def store_data(self):
-    #     '''
-    #     store the button data object into button_data_list
-    #     '''
-    #     button_data_list.append(self)
 
 
-# button_01 = ButtonData('button_01',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_enabled.png',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_hover.png',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_pressed.png',
-#                        100, 0, 1,
-#                        'pm.select("pSphere1", add=True)',
-#                        'pm.select("pSphere1", deselect=True)')
-# button_02 = ButtonData('button_02',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_enabled.png',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_hover.png',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_pressed.png',
-#                        0, 180, 0.6,
-#                        'pm.select("pCube1", add=True)',
-#                        'pm.select("pCube1", deselect=True)')
-# button_02 = ButtonData('button_03',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_enabled.png',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_hover.png',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_purple_pressed.png',
-#                        200, 180, 1,
-#                        'pm.select("pCylinder1", add=True)',
-#                        'pm.select("pCylinder1", deselect=True)')
-# button_02 = ButtonData('button_04',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_enabled.png',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_hover.png',
-#                        'B:/Documents/GitHub/RAA_autoRig/icons/button_star_orange_pressed.png',
-#                        100, 360, 0.6,
-#                        'pm.select("pCone1", add=True)',
-#                        'pm.select("pCone1", deselect=True)')
+class JsonConvert(object):
+    mappings = {}
+
+    @classmethod
+    def register(cls, class_instance):
+        '''
+        decorator method to register a class for JsonConvert
+        '''
+        class_attr = tuple(class_instance().__dict__.keys())
+        # frozenset returns immutable set object
+        cls.mappings[frozenset(class_attr)] = class_instance
+        return class_instance
+
+    @classmethod
+    def complex_handler(cls, obj):
+        '''
+        handler to json
+        '''
+        if hasattr(obj, '__dict__'):
+            return obj.__dict__
+        else:
+            message = 'Type {} with value {} is not JSON serializable'
+            raise TypeError(message.format(type(obj), repr(obj)))
+
+    @classmethod
+    def class_mapper(cls, dictionary):
+        '''
+        mapper from json to class
+        '''
+        for keys, cls in cls.mappings.items():
+            # are all required arguments present?
+            # True if keys has every elements of dictionary.keys()
+            if keys.issuperset(dictionary.keys()):
+                # ** unpacks dictionary
+                return cls(**dictionary)
+        else:
+            # Raise exception instead of silently returning None
+            # {!s} applies str() to format
+            message = 'Unable to find a matching class for object: {!s}'
+            raise ValueError(message.format(dictionary))
+
+    @classmethod
+    def to_json(cls, obj):
+        return json.dumps(obj.__dict__,
+                          default=cls.complex_handler,
+                          indent=4)
+
+    @classmethod
+    def from_json(cls, json_str):
+        return json.loads(json_str,
+                          object_hook=cls.class_mapper)
+
+    @classmethod
+    def to_file(cls, obj, path):
+        with open(path, 'w') as jfile:
+            jfile.writelines([cls.to_json(obj)])
+        return path
+
+    @classmethod
+    def from_file(cls, filepath):
+        result = None
+        with open(filepath, 'r') as jfile:
+            result = cls.from_json(jfile.read())
+        return result
 
 
 class ButtonEncoder(json.JSONEncoder):
@@ -289,9 +319,11 @@ class MainWindow(QtWidgets.QMainWindow):
         act_character_save.setStatusTip('Save current character')
         act_character_rename = menu_file.addAction('Rename Character')
         act_character_rename.setStatusTip('Rename current character')
-        act_character_delete = menu_file.addAction('Delete Character')
-        act_character_delete.setStatusTip('Delete current character')
-        act_character_delete.triggered.connect(self.delete_character)
+        act_character_rename.triggered.connect(self.rename_character)
+        self.act_character_delete = menu_file.addAction('Delete Character')
+        self.act_character_delete.setStatusTip('Delete current character')
+        self.act_character_delete.triggered.connect(self.delete_character)
+        self.act_character_delete.setDisabled(True)
 
         menu_file = menu_bar.addMenu('Tab')
         # act_tab_new = menu_file.addAction('New Tab')
@@ -310,8 +342,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if name is None:
             name, ok = QtWidgets.QInputDialog.getText(self,
                                                       'New Character',
-                                                      'Enter character name:')
+                                                      'Character name:')
             index = self.combo_box.count()
+            # enable Delete Character menu action
+            self.act_character_delete.setEnabled(True)
         else:
             # if window init with given name
             ok = True
@@ -326,6 +360,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.combo_box.addItem(name, character_data)
             self.combo_box.setCurrentIndex(index)
             self.new_tab_widget(character_data)
+
+    def rename_character(self):
+        '''
+        rename active character
+        update CharacterData and combo_box
+        '''
+        instruction = 'Rename "{}" to:'.format(self.character_data.name)
+        text, ok = QtWidgets.QInputDialog.getText(self,
+                                                  'Rename Character',
+                                                  instruction)
+        if ok:
+            self.character_data.name = text
+            current_index = self.combo_box.currentIndex()
+            self.combo_box.setItemText(current_index, text)
 
     def delete_character(self):
         '''
@@ -370,6 +418,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.new_tab_widget(self.character_data)
         self.name_label.setText(self.character_data.namespace)
         self.propagate_namespace()
+        if self.combo_box.count() == 1:
+            self.act_character_delete.setDisabled(True)
 
     def update_namespace(self):
         '''
