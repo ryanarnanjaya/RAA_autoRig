@@ -138,15 +138,15 @@ class JsonConvert(object):
 
     @classmethod
     def to_file(cls, obj, path):
-        with open(path, 'w') as jfile:
-            jfile.writelines([cls.to_json(obj)])
+        with open(path, 'w') as json_file:
+            json_file.writelines([cls.to_json(obj)])
         return path
 
     @classmethod
     def from_file(cls, filepath):
         result = None
-        with open(filepath, 'r') as jfile:
-            result = cls.from_json(jfile.read())
+        with open(filepath, 'r') as json_file:
+            result = cls.from_json(json_file.read())
         return result
 
 
@@ -162,7 +162,6 @@ class CharacterData(object):
     def __init__(self, name=None, tab_data_list=None, scene_data=None,
                  namespace=None):
         self.name = str(name)
-        self.scene_data = scene_data
         self.namespace = namespace
         # list of TabData
         self.tab_data_list = tab_data_list
@@ -170,9 +169,8 @@ class CharacterData(object):
 
 @JsonConvert.register
 class TabData(object):
-    def __init__(self, name=None, button_data_list=None, character_data=None):
+    def __init__(self, name=None, button_data_list=None):
         self.name = str(name)
-        self.character_data = character_data
         # list of ButtonData
         self.button_data_list = button_data_list
 
@@ -183,7 +181,7 @@ class ButtonData(object):
                  pxm_enabled=None, pxm_hover=None, pxm_pressed=None,
                  x=None, y=None, scale=None,
                  command_select=None, command_deselect=None,
-                 tab_data=None, node_list=None):
+                 node_list=None):
         self.name = str(name)
         self.pxm_enabled = pxm_enabled
         self.pxm_hover = pxm_hover
@@ -193,7 +191,6 @@ class ButtonData(object):
         self.scale = scale
         self.command_select = command_select
         self.command_deselect = command_deselect
-        self.tab_data = tab_data
         # list of nodes as inputs for commands
         self.node_list = node_list
 
@@ -286,6 +283,7 @@ class MainWindow(QtWidgets.QMainWindow):
         act_scene_open.setStatusTip('Open a picker scene')
         act_scene_save = menu_file.addAction('Save Scene')
         act_scene_save.setStatusTip('Save picker scene')
+        act_scene_save.triggered.connect(self.save_scene)
 
         menu_file = menu_bar.addMenu('Character')
         act_character_new = menu_file.addAction('New Character')
@@ -330,7 +328,6 @@ class MainWindow(QtWidgets.QMainWindow):
             index = 0
         if ok:
             character_data = CharacterData(name=name,
-                                           scene_data=self.scene_data,
                                            tab_data_list=list())
             self.scene_data.character_data_list.append(character_data)
             self.character_data = character_data
@@ -386,6 +383,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scene_data = SceneData(character_data_list=list())
         self.new_character(name='Character_1')
         self.propagate_namespace()
+
+    def save_scene(self):
+        '''
+        save SceneData to json file
+        '''
+        title = 'Save Scene'
+        path = file_dialog(caption=title, for_open=False,
+                           fmt={'Json File': ['json']})
+
+        if path != '':
+            JsonConvert.to_file(self.scene_data, path)
 
     def combo_box_activated(self, index):
         '''
@@ -523,7 +531,6 @@ class TabWidget(QtWidgets.QTabWidget):
         padding = self.get_max_padding() + 1
         tab_name = '{n}_{p}'.format(n=name, p=padding)
         tab_data = TabData(name=tab_name,
-                           character_data=self.character_data,
                            button_data_list=list())
         self.character_data.tab_data_list.append(tab_data)
         # self.pad += 1
@@ -625,6 +632,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
 
     def __init__(self, tab_data=None, parent=None):
         # create scene first
+        self.parent = parent
         self.graphics_scene = QtWidgets.QGraphicsScene()
         self.graphics_scene.setSceneRect(0, 0, 1, 1)
         # pass scene to the QGraphicsView's constructor method
@@ -678,6 +686,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         pxm_item = PixmapItem(pxm_enabled=pxm_s_list[0],
                               pxm_hover=pxm_s_list[1],
                               pxm_pressed=pxm_s_list[2],
+                              graphics_view = self,
                               button_data=button_data)
         pxm_item.setPos(button_data.x, button_data.y)
         # .png alpha as bounding box, already default
@@ -732,7 +741,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
                                  path_list[2],
                                  x, y, 1,
                                  command_select, command_deselect,
-                                 self.tab_data, node_list)
+                                 node_list)
         self.create_button(button_data)
         self.tab_data.button_data_list.append(button_data)
 
@@ -769,10 +778,11 @@ class GraphicsView(QtWidgets.QGraphicsView):
 class PixmapItem(QtWidgets.QGraphicsPixmapItem):
 
     def __init__(self, pxm_enabled, pxm_hover, pxm_pressed,
-                 button_data=None, parent=None):
+                 graphics_view, button_data=None, parent=None):
         self.pxm_enabled = pxm_enabled
         self.pxm_hover = pxm_hover
         self.pxm_pressed = pxm_pressed
+        self.graphics_view = graphics_view
         self.button_data = button_data
         self.command_select = button_data.command_select
         self.command_deselect = button_data.command_deselect
@@ -789,7 +799,7 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         '''
         set namespace to name_list for every node in node_list
         '''
-        namespace = self.button_data.tab_data.character_data.namespace
+        namespace = self.graphics_view.parent.character_data.namespace
         if namespace is None:
             return
         self.name_list = list()
@@ -935,7 +945,8 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         '''
         self.scene().removeItem(self)
         try:
-            self.button_data.tab_data.button_data_list.remove(self.button_data)
+            button_data_list = self.graphics_view.tab_data.button_data_list
+            button_data_list.remove(self.button_data)
         except ValueError as e:
             logger.error(e)
 
