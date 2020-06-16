@@ -237,7 +237,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tool_bar.setMovable(False)
         # self.statusBar().showMessage('...')
 
-        self.combo_box = QtWidgets.QComboBox(self.tool_bar)
+        self.combo_box = ComboBox(self.tool_bar)
         self.tool_bar.addWidget(self.combo_box)
         self.combo_box.setFixedSize(144, 18)
         self.combo_box.activated.connect(self.combo_box_activated)
@@ -279,6 +279,7 @@ class MainWindow(QtWidgets.QMainWindow):
         act_scene_new.triggered.connect(self.new_scene)
         act_scene_open = menu_file.addAction('Open Scene...')
         act_scene_open.setStatusTip('Open a picker scene')
+        act_scene_new.triggered.connect(self.open_scene)
         act_scene_save = menu_file.addAction('Save Scene')
         act_scene_save.setStatusTip('Save picker scene')
         act_scene_save.triggered.connect(self.save_scene)
@@ -323,6 +324,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.new_character(name='Character_1')
         self.propagate_namespace()
 
+    def open_scene(self):
+        '''
+        open json file to SceneData
+        apply SceneData
+        '''
+        title = 'Open Scene'
+        path = file_dialog(caption=title, for_open=True,
+                           fmt={'Json File': ['json']})
+        if path == '':
+            return
+        self.combo_box.clear()
+        self.scene_data = JsonConvert.from_file(path)
+        for character_data in self.scene_data.character_data_list:
+            self.create_character(character_data)
+        # current_index = self.combo_box.currentIndex()
+        # self.combo_box_activated(current_index)
+        # self.propagate_namespace()
+
     def save_scene(self):
         '''
         save SceneData to json file
@@ -341,22 +360,33 @@ class MainWindow(QtWidgets.QMainWindow):
             name, ok = QtWidgets.QInputDialog.getText(self,
                                                       'New Character',
                                                       'Character name:')
-            index = self.combo_box.count()
+            # index = self.combo_box.count()
             # enable Delete Character menu action
             self.act_character_delete.setEnabled(True)
         else:
             # if window init with given name
             ok = True
-            index = 0
+            # index = 0
         if ok:
             character_data = CharacterData(name=name,
                                            tab_data_list=list())
-            self.scene_data.character_data_list.append(character_data)
-            self.character_data = character_data
+            self.create_character(character_data)
 
-            self.combo_box.addItem(name, character_data)
+    def create_character(self, character_data):
+        '''
+        create a character based on character_data
+        '''
+        self.scene_data.character_data_list.append(character_data)
+        self.character_data = character_data
+
+        self.combo_box.addItem(character_data.name,
+                               character_data,
+                               )
+        index = self.combo_box.findData(character_data)
+        print(index)
+        if index != -1:
             self.combo_box.setCurrentIndex(index)
-            self.new_tab_widget(character_data)
+        self.new_tab_widget(character_data)
 
     def combo_box_activated(self, index):
         '''
@@ -448,7 +478,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def propagate_namespace(self):
         '''
-        update character_data
+        update CharacterData
         propagate namespace in each child buttons
         '''
         self.character_data.namespace = self.name_label.text()
@@ -458,6 +488,17 @@ class MainWindow(QtWidgets.QMainWindow):
                 if QtWidgets.QGraphicsItem.ItemIsSelectable == button.flags():
                     # only buttons have ItemIsSelectable flag
                     button.set_namespace()
+
+
+class ComboBox(QtWidgets.QComboBox):
+    '''
+    reimplement findData to work with python objects
+    '''
+    def findData(self, data):
+        for index in range(self.count()):
+            if self.itemData(index) == data:
+                return index
+        return -1
 
 
 class TabWidget(QtWidgets.QTabWidget):
