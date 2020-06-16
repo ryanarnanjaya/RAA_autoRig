@@ -1,18 +1,16 @@
-from PySide2 import QtGui, QtCore, QtWidgets, QtUiTools, QtOpenGL
+from PySide2 import QtGui, QtCore, QtWidgets
 from shiboken2 import wrapInstance
-from functools import partial
+# from functools import partial
 # deque is a list-like container with fast O(1) appends and pops on either end
-from collections import deque
+# from collections import deque
 # import maya.OpenMaya as om
 import maya.OpenMayaUI as omui
-import maya.cmds as cmds
+# import maya.cmds as cmds
 import pymel.core as pm
 # import os
 import logging
 import json
 import re
-# import sip
-# No module named sip
 # import yaml
 # The Qt Resource System for .png files
 # Add tabs for facial and body pickers
@@ -293,6 +291,7 @@ class MainWindow(QtWidgets.QMainWindow):
         act_character_open.setStatusTip('Open a character')
         act_character_save = menu_file.addAction('Save Character')
         act_character_save.setStatusTip('Save current character')
+        act_character_save.triggered.connect(self.save_character)
         act_character_rename = menu_file.addAction('Rename Character')
         act_character_rename.setStatusTip('Rename current character')
         act_character_rename.triggered.connect(self.rename_character)
@@ -308,8 +307,31 @@ class MainWindow(QtWidgets.QMainWindow):
         act_tab_open.setStatusTip('Open a tab')
         act_tab_save = menu_file.addAction('Save Tab')
         act_tab_save.setStatusTip('Save current tab')
+        act_tab_save.triggered.connect(self.save_tab)
         # act_tab_delete = menu_file.addAction('Delete Tab')
         # act_tab_delete.setStatusTip('Delete current tab')
+
+    def new_scene(self):
+        '''
+        clear all characters in combo_box
+        create a new SceneData with blank character_data_list
+        add a new Character_1
+        update namespace on CharacterData based on name_label
+        '''
+        self.combo_box.clear()
+        self.scene_data = SceneData(character_data_list=list())
+        self.new_character(name='Character_1')
+        self.propagate_namespace()
+
+    def save_scene(self):
+        '''
+        save SceneData to json file
+        '''
+        title = 'Save Scene'
+        path = file_dialog(caption=title, for_open=False,
+                           fmt={'Json File': ['json']})
+        if path != '':
+            JsonConvert.to_file(self.scene_data, path)
 
     def new_character(self, name=None):
         '''
@@ -335,6 +357,36 @@ class MainWindow(QtWidgets.QMainWindow):
             self.combo_box.addItem(name, character_data)
             self.combo_box.setCurrentIndex(index)
             self.new_tab_widget(character_data)
+
+    def combo_box_activated(self, index):
+        '''
+        when user selects a character from combo_box
+        set namespace from CharacterData
+        '''
+        self.character_data = self.combo_box.itemData(index)
+        self.new_tab_widget(self.character_data)
+        self.name_label.setText(self.character_data.namespace)
+        self.propagate_namespace()
+        if self.combo_box.count() == 1:
+            self.act_character_delete.setDisabled(True)
+
+    def new_tab_widget(self, character_data):
+        '''
+        create a new main widget for a new character
+        '''
+        tab_widget = TabWidget(character_data=character_data,
+                               parent=self)
+        self.setCentralWidget(tab_widget)
+
+    def save_character(self):
+        '''
+        save CharacterData to json file
+        '''
+        title = 'Save Character'
+        path = file_dialog(caption=title, for_open=False,
+                           fmt={'Json File': ['json']})
+        if path != '':
+            JsonConvert.to_file(self.character_data, path)
 
     def rename_character(self):
         '''
@@ -364,48 +416,21 @@ class MainWindow(QtWidgets.QMainWindow):
         current_index = self.combo_box.currentIndex()
         self.combo_box_activated(current_index)
 
-    def new_tab_widget(self, character_data):
+    def save_tab(self):
         '''
-        create a new main widget for a new character
+        save TabData to json file
+        get TabData from QGraphicsView
         '''
-        tab_widget = TabWidget(character_data=character_data,
-                               parent=self)
-        self.setCentralWidget(tab_widget)
-
-    def new_scene(self):
-        '''
-        clear all characters in combo_box
-        create a new SceneData with blank character_data_list
-        add a new Character_1
-        update namespace on CharacterData based on name_label
-        '''
-        self.combo_box.clear()
-        self.scene_data = SceneData(character_data_list=list())
-        self.new_character(name='Character_1')
-        self.propagate_namespace()
-
-    def save_scene(self):
-        '''
-        save SceneData to json file
-        '''
-        title = 'Save Scene'
+        title = 'Save Tab'
         path = file_dialog(caption=title, for_open=False,
                            fmt={'Json File': ['json']})
-
-        if path != '':
-            JsonConvert.to_file(self.scene_data, path)
-
-    def combo_box_activated(self, index):
-        '''
-        when user selects a character from combo_box
-        set namespace from CharacterData
-        '''
-        self.character_data = self.combo_box.itemData(index)
-        self.new_tab_widget(self.character_data)
-        self.name_label.setText(self.character_data.namespace)
-        self.propagate_namespace()
-        if self.combo_box.count() == 1:
-            self.act_character_delete.setDisabled(True)
+        if path == '':
+            return
+        child_tab_widget = self.findChildren(QtWidgets.QTabWidget)
+        current_widget = child_tab_widget[0].currentWidget()
+        graphics_view = current_widget.findChildren(QtWidgets.QGraphicsView)
+        tab_data = graphics_view[0].tab_data
+        JsonConvert.to_file(tab_data, path)
 
     def update_namespace(self):
         '''
@@ -433,22 +458,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 if QtWidgets.QGraphicsItem.ItemIsSelectable == button.flags():
                     # only buttons have ItemIsSelectable flag
                     button.set_namespace()
-
-
-# class MainWidget(QtWidgets.QWidget):
-#     '''
-#     container widget for tabs widget and QGraphicsView
-#     '''
-#     def __init__(self, parent=None):
-#         super(MainWidget, self).__init__(parent)
-#         self.size = (512, 512)
-#         self.create_ui()
-
-#     def create_ui(self):
-#         self.tab_widget = TabWidget(self)
-#         self.main_layout = QtWidgets.QVBoxLayout()
-#         self.setLayout(self.main_layout)
-#         self.main_layout.addWidget(self.tab_widget)
 
 
 class TabWidget(QtWidgets.QTabWidget):
@@ -543,13 +552,16 @@ class TabWidget(QtWidgets.QTabWidget):
         '''
         tab_layout = QtWidgets.QVBoxLayout()
         widget = QtWidgets.QWidget()
-        graphics_view = GraphicsView(tab_data=tab_data,
-                                     parent=self)
+        widget.setLayout(tab_layout)
+
         index = self.count() - 1
         self.insertTab(index, widget, tab_data.name)
-        widget.setLayout(tab_layout)
-        tab_layout.addWidget(graphics_view)
         self.setCurrentIndex(index)
+
+        graphics_view = GraphicsView(tab_data=tab_data,
+                                     parent=widget)
+        tab_layout.addWidget(graphics_view)
+        graphics_view.init_button_list()
         return widget
 
     @QtCore.Slot()
@@ -579,7 +591,6 @@ class TabBar(QtWidgets.QTabBar):
 
     def __init__(self, parent=None):
         super(TabBar, self).__init__(parent)
-        self.parent = parent
 
     def mouseDoubleClickEvent(self, event):
         tab_index = self.tabAt(event.pos())
@@ -621,7 +632,8 @@ class TabBar(QtWidgets.QTabBar):
         self.line_edit.deleteLater()
         self.line_edit = None
         # update tab_data.name
-        tab_data = self.parent.character_data.tab_data_list[self.edited_tab]
+        character_data = self.parentWidget().character_data
+        tab_data = character_data.tab_data_list[self.edited_tab]
         tab_data.name = new_name
 
 
@@ -632,7 +644,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
 
     def __init__(self, tab_data=None, parent=None):
         # create scene first
-        self.parent = parent
+        # self.parent = parent
         self.graphics_scene = QtWidgets.QGraphicsScene()
         self.graphics_scene.setSceneRect(0, 0, 1, 1)
         # pass scene to the QGraphicsView's constructor method
@@ -643,13 +655,15 @@ class GraphicsView(QtWidgets.QGraphicsView):
 
         # format = QtOpenGL.QGLFormat(QtOpenGL.QGL.SampleBuffers)
         # self.setViewport(QtOpenGL.QGLWidget(format))
-
         self.setDragMode(self.RubberBandDrag)
-
         self.background = QtWidgets.QGraphicsPixmapItem(None)
         self.graphics_scene.addItem(self.background)
-
         self.tab_data = tab_data
+
+    def init_button_list(self):
+        '''
+        init buttons based on button_data_list
+        '''
         for button_data in self.tab_data.button_data_list:
             self.create_button(button_data)
 
@@ -686,13 +700,13 @@ class GraphicsView(QtWidgets.QGraphicsView):
         pxm_item = PixmapItem(pxm_enabled=pxm_s_list[0],
                               pxm_hover=pxm_s_list[1],
                               pxm_pressed=pxm_s_list[2],
-                              graphics_view = self,
-                              button_data=button_data)
+                              button_data=button_data,
+                              )
         pxm_item.setPos(button_data.x, button_data.y)
         # .png alpha as bounding box, already default
         # pxm_item.ShapeMode(QtWidgets.QGraphicsPixmapItem.MaskShape)
-
         self.graphics_scene.addItem(pxm_item)
+        pxm_item.set_namespace()
 
     def get_mouse_pos(self):
         '''
@@ -741,7 +755,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
                                  path_list[2],
                                  x, y, 1,
                                  command_select, command_deselect,
-                                 node_list)
+                                 node_list,
+                                 )
         self.create_button(button_data)
         self.tab_data.button_data_list.append(button_data)
 
@@ -778,11 +793,10 @@ class GraphicsView(QtWidgets.QGraphicsView):
 class PixmapItem(QtWidgets.QGraphicsPixmapItem):
 
     def __init__(self, pxm_enabled, pxm_hover, pxm_pressed,
-                 graphics_view, button_data=None, parent=None):
+                 button_data=None, parent=None):
         self.pxm_enabled = pxm_enabled
         self.pxm_hover = pxm_hover
         self.pxm_pressed = pxm_pressed
-        self.graphics_view = graphics_view
         self.button_data = button_data
         self.command_select = button_data.command_select
         self.command_deselect = button_data.command_deselect
@@ -793,13 +807,15 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         self.setAcceptTouchEvents(True)
         self._drag = False
         self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable, True)
-        self.set_namespace()
 
     def set_namespace(self):
         '''
         set namespace to name_list for every node in node_list
         '''
-        namespace = self.graphics_view.parent.character_data.namespace
+        graphics_view = self.scene().views()[0]
+        # QGraphicsView > QWidget > QVBoxLayout > QTabWidget
+        tab_widget = graphics_view.parentWidget().parentWidget().parentWidget()
+        namespace = tab_widget.character_data.namespace
         if namespace is None:
             return
         self.name_list = list()
@@ -945,7 +961,8 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         '''
         self.scene().removeItem(self)
         try:
-            button_data_list = self.graphics_view.tab_data.button_data_list
+            graphics_view = self.scene().views()[0]
+            button_data_list = graphics_view.tab_data.button_data_list
             button_data_list.remove(self.button_data)
         except ValueError as e:
             logger.error(e)
