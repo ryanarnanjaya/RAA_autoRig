@@ -279,7 +279,7 @@ class MainWindow(QtWidgets.QMainWindow):
         act_scene_new.triggered.connect(self.new_scene)
         act_scene_open = menu_file.addAction('Open Scene...')
         act_scene_open.setStatusTip('Open a picker scene')
-        act_scene_new.triggered.connect(self.open_scene)
+        act_scene_open.triggered.connect(self.open_scene)
         act_scene_save = menu_file.addAction('Save Scene')
         act_scene_save.setStatusTip('Save picker scene')
         act_scene_save.triggered.connect(self.save_scene)
@@ -290,6 +290,7 @@ class MainWindow(QtWidgets.QMainWindow):
         act_character_new.triggered.connect(self.new_character)
         act_character_open = menu_file.addAction('Open Character...')
         act_character_open.setStatusTip('Open a character')
+        act_character_open.triggered.connect(self.open_character)
         act_character_save = menu_file.addAction('Save Character')
         act_character_save.setStatusTip('Save current character')
         act_character_save.triggered.connect(self.save_character)
@@ -306,6 +307,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # act_tab_new.setStatusTip('Add a new blank tab')
         act_tab_open = menu_file.addAction('Open Tab...')
         act_tab_open.setStatusTip('Open a tab')
+        act_tab_open.triggered.connect(self.open_tab)
         act_tab_save = menu_file.addAction('Save Tab')
         act_tab_save.setStatusTip('Save current tab')
         act_tab_save.triggered.connect(self.save_tab)
@@ -328,19 +330,21 @@ class MainWindow(QtWidgets.QMainWindow):
         '''
         open json file to SceneData
         apply SceneData
+        create characters from character_data_list
         '''
         title = 'Open Scene'
         path = file_dialog(caption=title, for_open=True,
                            fmt={'Json File': ['json']})
         if path == '':
             return
+        scene_data = JsonConvert.from_file(path)
+        if not isinstance(scene_data, SceneData):
+            logger.error('{} is not a scene file'.format(path))
+            return
         self.combo_box.clear()
-        self.scene_data = JsonConvert.from_file(path)
+        self.scene_data = scene_data
         for character_data in self.scene_data.character_data_list:
             self.create_character(character_data)
-        # current_index = self.combo_box.currentIndex()
-        # self.combo_box_activated(current_index)
-        # self.propagate_namespace()
 
     def save_scene(self):
         '''
@@ -360,33 +364,31 @@ class MainWindow(QtWidgets.QMainWindow):
             name, ok = QtWidgets.QInputDialog.getText(self,
                                                       'New Character',
                                                       'Character name:')
-            # index = self.combo_box.count()
-            # enable Delete Character menu action
-            self.act_character_delete.setEnabled(True)
         else:
             # if window init with given name
             ok = True
-            # index = 0
         if ok:
             character_data = CharacterData(name=name,
                                            tab_data_list=list())
+            self.scene_data.character_data_list.append(character_data)
             self.create_character(character_data)
 
     def create_character(self, character_data):
         '''
         create a character based on character_data
         '''
-        self.scene_data.character_data_list.append(character_data)
         self.character_data = character_data
-
         self.combo_box.addItem(character_data.name,
                                character_data,
                                )
         index = self.combo_box.findData(character_data)
-        print(index)
         if index != -1:
             self.combo_box.setCurrentIndex(index)
         self.new_tab_widget(character_data)
+
+        if self.combo_box.count() > 1:
+            # enable Delete Character menu action
+            self.act_character_delete.setEnabled(True)
 
     def combo_box_activated(self, index):
         '''
@@ -407,6 +409,24 @@ class MainWindow(QtWidgets.QMainWindow):
         tab_widget = TabWidget(character_data=character_data,
                                parent=self)
         self.setCentralWidget(tab_widget)
+
+    def open_character(self):
+        '''
+        open json file to CharacterData
+        apply CharacterData
+        create character
+        '''
+        title = 'Open Character'
+        path = file_dialog(caption=title, for_open=True,
+                           fmt={'Json File': ['json']})
+        if path == '':
+            return
+        character_data = JsonConvert.from_file(path)
+        if not isinstance(character_data, CharacterData):
+            logger.error('{} is not a character file'.format(path))
+            return
+        self.character_data = character_data
+        self.create_character(self.character_data)
 
     def save_character(self):
         '''
@@ -446,6 +466,25 @@ class MainWindow(QtWidgets.QMainWindow):
         current_index = self.combo_box.currentIndex()
         self.combo_box_activated(current_index)
 
+    def open_tab(self):
+        '''
+        open json file to TabData
+        append TabData to tab_data_list
+        create tab
+        '''
+        title = 'Open Tab'
+        path = file_dialog(caption=title, for_open=True,
+                           fmt={'Json File': ['json']})
+        if path == '':
+            return
+        tab_data = JsonConvert.from_file(path)
+        if not isinstance(tab_data, TabData):
+            logger.error('{} is not a tab file'.format(path))
+            return
+        self.character_data.tab_data_list.append(tab_data)
+        tab_widget = self.centralWidget()
+        tab_widget.create_tab(tab_data)
+
     def save_tab(self):
         '''
         save TabData to json file
@@ -456,8 +495,9 @@ class MainWindow(QtWidgets.QMainWindow):
                            fmt={'Json File': ['json']})
         if path == '':
             return
-        child_tab_widget = self.findChildren(QtWidgets.QTabWidget)
-        current_widget = child_tab_widget[0].currentWidget()
+        # tab_widget = self.findChildren(QtWidgets.QTabWidget)
+        tab_widget = self.centralWidget()
+        current_widget = tab_widget.currentWidget()
         graphics_view = current_widget.findChildren(QtWidgets.QGraphicsView)
         tab_data = graphics_view[0].tab_data
         JsonConvert.to_file(tab_data, path)
@@ -621,8 +661,6 @@ class TabWidget(QtWidgets.QTabWidget):
             self.tabBar().tabButton(0, right_side).show()
         if self.count() == 2:
             self.tabBar().tabButton(0, right_side).hide()
-        # finish rename line_edit
-        # self.tabBar().finish_rename()
 
 
 class TabBar(QtWidgets.QTabBar):
