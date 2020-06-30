@@ -167,10 +167,12 @@ class CharacterData(object):
 
 @JsonConvert.register
 class TabData(object):
-    def __init__(self, name=None, button_data_list=None):
+    def __init__(self, name=None, button_data_list=None,
+                 pxm_background=None):
         self.name = str(name)
         # list of ButtonData
         self.button_data_list = button_data_list
+        self.pxm_background = pxm_background
 
 
 @JsonConvert.register
@@ -738,6 +740,8 @@ class GraphicsView(QtWidgets.QGraphicsView):
         self.background = QtWidgets.QGraphicsPixmapItem(None)
         self.graphics_scene.addItem(self.background)
         self.tab_data = tab_data
+        if self.tab_data.pxm_background is not None:
+            self.change_background(self.tab_data.pxm_background)
 
     def init_button_list(self):
         '''
@@ -839,18 +843,20 @@ class GraphicsView(QtWidgets.QGraphicsView):
         self.create_button(button_data)
         self.tab_data.button_data_list.append(button_data)
 
-    def change_background(self):
+    def change_background(self, path=None):
         '''
         called from contextMenuEvent
         change the background of the picker
         '''
-        title = 'Open Background'
-        path = file_dialog(caption=title, for_open=True,
-                           fmt={'Image Files': ['png', 'jpeg',
-                                                'jpg', 'jpe']})
+        if path is None:
+            title = 'Open Background'
+            path = file_dialog(caption=title, for_open=True,
+                               fmt={'Image Files': ['png', 'jpeg',
+                                                    'jpg', 'jpe']})
         if path != '':
             pxm = QtGui.QPixmap(path)
             self.background.setPixmap(pxm)
+            self.tab_data.pxm_background = path
 
     def mousePressEvent(self, event):
         logger.debug('view CLICK')
