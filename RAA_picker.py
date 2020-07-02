@@ -13,11 +13,7 @@ import json
 import re
 # import yaml
 # The Qt Resource System for .png files
-# Add tabs for facial and body pickers
-# Scene level template,
-# Work with namespaces
 # paint your own customizable button?
-# if instanced rig is the same, 50 orcs
 # render viewport and use as background
 # QMimeType?
 # ctrl+A to select all
@@ -223,7 +219,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.setWindowFlags(QtCore.Qt.Window)
         self.setProperty('saveWindowPref', True)
         self.title = 'RAA_picker'
-        self.size = (720, 720)
+        self.size = (824, 880)
         self.scene_data = None
         self.character_data = None
         self.create_ui()
@@ -335,7 +331,7 @@ class MainWindow(QtWidgets.QMainWindow):
         create characters from character_data_list
         '''
         title = 'Open Scene'
-        path = file_dialog(caption=title, for_open=True,
+        path = file_dialog(parent=self, caption=title, for_open=True,
                            fmt={'Json File': ['json']})
         if path == '':
             return
@@ -353,7 +349,7 @@ class MainWindow(QtWidgets.QMainWindow):
         save SceneData to json file
         '''
         title = 'Save Scene'
-        path = file_dialog(caption=title, for_open=False,
+        path = file_dialog(parent=self, caption=title, for_open=False,
                            fmt={'Json File': ['json']})
         if path != '':
             JsonConvert.to_file(self.scene_data, path)
@@ -419,7 +415,7 @@ class MainWindow(QtWidgets.QMainWindow):
         create character
         '''
         title = 'Open Character'
-        path = file_dialog(caption=title, for_open=True,
+        path = file_dialog(parent=self, caption=title, for_open=True,
                            fmt={'Json File': ['json']})
         if path == '':
             return
@@ -435,7 +431,7 @@ class MainWindow(QtWidgets.QMainWindow):
         save CharacterData to json file
         '''
         title = 'Save Character'
-        path = file_dialog(caption=title, for_open=False,
+        path = file_dialog(parent=self, caption=title, for_open=False,
                            fmt={'Json File': ['json']})
         if path != '':
             JsonConvert.to_file(self.character_data, path)
@@ -475,7 +471,7 @@ class MainWindow(QtWidgets.QMainWindow):
         create tab
         '''
         title = 'Open Tab'
-        path = file_dialog(caption=title, for_open=True,
+        path = file_dialog(parent=self, caption=title, for_open=True,
                            fmt={'Json File': ['json']})
         if path == '':
             return
@@ -493,7 +489,7 @@ class MainWindow(QtWidgets.QMainWindow):
         get TabData from QGraphicsView
         '''
         title = 'Save Tab'
-        path = file_dialog(caption=title, for_open=False,
+        path = file_dialog(parent=self, caption=title, for_open=False,
                            fmt={'Json File': ['json']})
         if path == '':
             return
@@ -828,7 +824,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         path_list = list()
         for string in pxm_list:
             title = 'Open {}'.format(string)
-            path = file_dialog(caption=title, for_open=True,
+            path = file_dialog(parent=self, caption=title, for_open=True,
                                fmt={'Image Files': ['png', 'jpeg',
                                                     'jpg', 'jpe']})
             path_list.append(path)
@@ -850,7 +846,7 @@ class GraphicsView(QtWidgets.QGraphicsView):
         '''
         if path is None:
             title = 'Open Background'
-            path = file_dialog(caption=title, for_open=True,
+            path = file_dialog(parent=self, caption=title, for_open=True,
                                fmt={'Image Files': ['png', 'jpeg',
                                                     'jpg', 'jpe']})
         if path != '':
@@ -1023,18 +1019,20 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         change the enabled, hover, pressed icons
         update the path in ButtonData
         '''
+        graphics_view = self.scene().views()[0]
         pxm_list = ['pxm_enabled',
                     'pxm_hover',
                     'pxm_pressed']
         for string in pxm_list:
             title = 'Change {}'.format(string)
-            path = file_dialog(caption=title, for_open=True,
+            path = file_dialog(parent=graphics_view,
+                               caption=title, for_open=True,
                                fmt={'Image Files': ['png', 'jpeg',
                                                     'jpg', 'jpe']})
             if path != '':
                 pxm = QtGui.QPixmap(path)
                 setattr(self, string, pxm)
-                setattr(self.button_data, string, pxm)
+                setattr(self.button_data, string, path)
         self.setPixmap(self.pxm_enabled)
 
     @QtCore.Slot()
@@ -1044,9 +1042,9 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         remove a button and its ButtonData in TabData.button_data_list
         todo: remove from TabData
         '''
+        graphics_view = self.scene().views()[0]
         self.scene().removeItem(self)
         try:
-            graphics_view = self.scene().views()[0]
             button_data_list = graphics_view.tab_data.button_data_list
             button_data_list.remove(self.button_data)
         except ValueError as e:
