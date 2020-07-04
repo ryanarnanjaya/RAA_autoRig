@@ -5,7 +5,7 @@ from shiboken2 import wrapInstance
 # from collections import deque
 # import maya.OpenMaya as om
 import maya.OpenMayaUI as omui
-# import maya.cmds as cmds
+import maya.cmds as cmds
 import pymel.core as pm
 # import os
 import logging
@@ -892,10 +892,11 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
     def set_namespace(self):
         '''
         set namespace to name_list for every node in node_list
+        declare self.graphics_view
         '''
-        graphics_view = self.scene().views()[0]
+        self.graphics_view = self.scene().views()[0]
         # QGraphicsView > QWidget > QVBoxLayout > QTabWidget
-        tab_widget = graphics_view.parentWidget().parentWidget().parentWidget()
+        tab_widget = self.graphics_view.parentWidget().parentWidget().parentWidget()
         namespace = tab_widget.character_data.namespace
         if namespace is None:
             return
@@ -1008,6 +1009,10 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         action_select = menu_popup.addAction('Change Selection')
         action_select.setStatusTip('Change command to current selection')
         action_select.triggered.connect(self.change_selection)
+
+        action_command = menu_popup.addAction('Edit Command')
+        action_command.setStatusTip('Edit select and deselect commands')
+        action_command.triggered.connect(self.edit_command)
         menu_popup.exec_(event.screenPos())
         # prevent QGraphicsView's contextMenuEvent to run
         event.setAccepted(True)
@@ -1019,13 +1024,12 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         change the enabled, hover, pressed icons
         update the path in ButtonData
         '''
-        graphics_view = self.scene().views()[0]
         pxm_list = ['pxm_enabled',
                     'pxm_hover',
                     'pxm_pressed']
         for string in pxm_list:
             title = 'Change {}'.format(string)
-            path = file_dialog(parent=graphics_view,
+            path = file_dialog(parent=self.graphics_view,
                                caption=title, for_open=True,
                                fmt={'Image Files': ['png', 'jpeg',
                                                     'jpg', 'jpe']})
@@ -1042,10 +1046,9 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         remove a button and its ButtonData in TabData.button_data_list
         todo: remove from TabData
         '''
-        graphics_view = self.scene().views()[0]
         self.scene().removeItem(self)
         try:
-            button_data_list = graphics_view.tab_data.button_data_list
+            button_data_list = self.graphics_view.tab_data.button_data_list
             button_data_list.remove(self.button_data)
         except ValueError as e:
             logger.error(e)
@@ -1065,6 +1068,186 @@ class PixmapItem(QtWidgets.QGraphicsPixmapItem):
         # update ButtonData
         self.button_data.node_list = self.node_list
         self.set_namespace()
+
+    def edit_command(self):
+        '''
+        edit select and deselect command
+        create a new QDialog with two QTextEdit inputs
+        '''
+        self.dialog_command = QtWidgets.QDialog(parent=self.graphics_view)
+        title = 'Edit Command'
+        size = (412, 440)
+
+        self.dialog_command.setWindowTitle(title)
+        self.dialog_command.resize(QtCore.QSize(*size))
+        self.dialog_command.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+
+        vertical_layout = QtWidgets.QVBoxLayout()
+        self.dialog_command.setLayout(vertical_layout)
+
+        label_select = QtWidgets.QLabel(parent=self.dialog_command, text='Select command:')
+        self.text_edit_select = LNTextEdit(parent=self.dialog_command)
+        self.text_edit_select.setText(self.command_select)
+
+        label_deselect = QtWidgets.QLabel(parent=self.dialog_command, text='Deselect command:')
+        self.text_edit_deselect = LNTextEdit(parent=self.dialog_command)
+        self.text_edit_deselect.setText(self.command_deselect)
+
+        dialog_button = QtWidgets.QDialogButtonBox(parent=self.dialog_command)
+        dialog_button.setStandardButtons(dialog_button.Save
+                                         | dialog_button.Cancel)
+        dialog_button.accepted.connect(self.save_edit_command)
+        dialog_button.rejected.connect(self.dialog_command.close)
+
+        vertical_layout.addWidget(label_select)
+        vertical_layout.addWidget(self.text_edit_select)
+        vertical_layout.addWidget(label_deselect)
+        vertical_layout.addWidget(self.text_edit_deselect)
+        vertical_layout.addWidget(dialog_button)
+
+        self.dialog_command.show()
+
+    def save_edit_command(self):
+        '''
+        save and apply command strings from edit command dialog
+        apply to PixmapItem button
+        apply to ButtonData
+        close edit command dialog
+        '''
+        self.command_select = self.text_edit_select.getText()
+        self.command_deselect = self.text_edit_deselect.getText()
+
+        self.button_data.command_select = self.command_select
+        self.button_data.command_deselect = self.command_deselect
+
+        self.dialog_command.close()
+
+
+class LNTextEdit(QtWidgets.QFrame):
+    '''
+    PySide2 implementation of:
+    https://nachtimwald.com/2009/08/19/better-qplaintextedit-with-line-numbers/
+    '''
+
+    class NumberBar(QtWidgets.QWidget):
+
+        def __init__(self, edit):
+            QtWidgets.QWidget.__init__(self, edit)
+
+            self.edit = edit
+            self.adjustWidth(1)
+
+        def paintEvent(self, event):
+            self.edit.numberbarPaint(self, event)
+            QtWidgets.QWidget.paintEvent(self, event)
+
+        def adjustWidth(self, count):
+            width = self.fontMetrics().width(str(count))
+            if self.width() != width:
+                self.setFixedWidth(width)
+
+        def updateContents(self, rect, scroll):
+            if scroll:
+                self.scroll(0, scroll)
+            else:
+                # It would be nice to do
+                # self.update(0, rect.y(), self.width(), rect.height())
+                # But we can't because it will not remove the bold on the
+                # current line if word wrap is enabled and a new block is
+                # selected.
+                self.update()
+
+
+    class PlainTextEdit(QtWidgets.QPlainTextEdit):
+
+        def __init__(self, *args):
+            QtWidgets.QPlainTextEdit.__init__(self, *args)
+
+            # self.setFrameStyle(QFrame.NoFrame)
+
+            self.setFrameStyle(QtWidgets.QFrame.NoFrame)
+            self.highlight()
+            # self.setLineWrapMode(QPlainTextEdit.NoWrap)
+
+            self.cursorPositionChanged.connect(self.highlight)
+
+        def highlight(self):
+            hi_selection = QtWidgets.QTextEdit.ExtraSelection()
+
+            hi_selection.format.setBackground(self.palette().alternateBase())
+            hi_selection.format.setProperty(QtGui.QTextFormat.FullWidthSelection, True)
+            hi_selection.cursor = self.textCursor()
+            hi_selection.cursor.clearSelection()
+
+            self.setExtraSelections([hi_selection])
+
+        def numberbarPaint(self, number_bar, event):
+            font_metrics = self.fontMetrics()
+            current_line = self.document().findBlock(self.textCursor().position()).blockNumber() + 1
+
+            block = self.firstVisibleBlock()
+            line_count = block.blockNumber()
+            painter = QtGui.QPainter(number_bar)
+            painter.fillRect(event.rect(), self.palette().base())
+
+            # Iterate over all visible text blocks in the document.
+            while block.isValid():
+                line_count += 1
+                block_top = self.blockBoundingGeometry(block).translated(self.contentOffset()).top()
+
+                # Check if the position of the block is out side of the visible
+                # area.
+                if not block.isVisible() or block_top >= event.rect().bottom():
+                    break
+
+                # We want the line number for the selected line to be bold.
+                if line_count == current_line:
+                    font = painter.font()
+                    font.setBold(True)
+                    painter.setFont(font)
+                else:
+                    font = painter.font()
+                    font.setBold(False)
+                    painter.setFont(font)
+
+                # Draw the line number right justified at the position of the line.
+                paint_rect = QtCore.QRect(0, block_top, number_bar.width(), font_metrics.height())
+                painter.drawText(paint_rect, QtCore.Qt.AlignRight, str(line_count))
+
+                block = block.next()
+            painter.end()
+
+    def __init__(self, parent, *args):
+        QtWidgets.QFrame.__init__(self, parent=parent, *args)
+
+        self.setFrameStyle(QtWidgets.QFrame.StyledPanel | QtWidgets.QFrame.Sunken)
+
+        self.edit = self.PlainTextEdit()
+        self.number_bar = self.NumberBar(self.edit)
+
+        hbox = QtWidgets.QHBoxLayout(self)
+        hbox.setSpacing(0)
+        hbox.setMargin(0)
+        hbox.addWidget(self.number_bar)
+        hbox.addWidget(self.edit)
+
+        self.edit.blockCountChanged.connect(self.number_bar.adjustWidth)
+        self.edit.updateRequest.connect(self.number_bar.updateContents)
+
+    def getText(self):
+        return str(self.edit.toPlainText())
+
+    def setText(self, text):
+        self.edit.setPlainText(text)
+
+    def isModified(self):
+        return self.edit.document().isModified()
+
+    def setModified(self, modified):
+        self.edit.document().setModified(modified)
+
+    def setLineWrapMode(self, mode):
+        self.edit.setLineWrapMode(mode)
 
 
 test_ui = MainWindow()
